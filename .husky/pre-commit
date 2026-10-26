@@ -1,1 +1,11 @@
-pnpm exec lint-staged
+#!/bin/sh
+
+echo "🔍 Running lint checks before commit..."
+pnpm lint
+
+if [ $? -ne 0 ]; then
+  echo "❌ Lint failed. Fix the errors before committing."
+  exit 1
+fi
+
+echo "✅ Lint passed."
