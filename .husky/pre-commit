@@ -1,11 +1,11 @@
 #!/bin/sh
 
-echo "🔍 Running lint checks before commit..."
+set -e
+
+echo "🎨 Fixing Prettier formatting..."
+pnpm format
+
+echo "🔍 Running lint checks..."
 pnpm lint
 
-if [ $? -ne 0 ]; then
-  echo "❌ Lint failed. Fix the errors before committing."
-  exit 1
-fi
-
-echo "✅ Lint passed."
+echo "✅ Pre-commit checks passed!"

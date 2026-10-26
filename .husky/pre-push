@@ -1,21 +1,15 @@
-cat > .husky/pre-push <<'EOF'
 #!/bin/sh
 
-echo "🔍 Running typecheck before push..."
-pnpm typecheck
+set -e
 
-if [ $? -ne 0 ]; then
-  echo "❌ Typecheck failed. Fix the errors before pushing."
-  exit 1
-fi
+echo "🎨 Fixing Prettier formatting..."
+pnpm format
 
-echo "🔍 Running lint before push..."
+
+echo "🔍 Running lint checks..."
 pnpm lint
 
-if [ $? -ne 0 ]; then
-  echo "❌ Lint failed. Fix the errors before pushing."
-  exit 1
-fi
+echo "🔬 Running TypeScript typecheck..."
+pnpm typecheck
 
-echo "✅ All checks passed. Proceeding with push."
-EOF
+echo "✅ All pre-push checks passed!"
