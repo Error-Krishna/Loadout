@@ -1,5 +1,5 @@
-import mongoose, { Schema } from "mongoose";
-import type { Model, Types } from "mongoose";
+import mongoose, { Schema } from 'mongoose';
+import type { Model, Types } from 'mongoose';
 
 export interface AuthSessionDocument {
   userId: Types.ObjectId;
@@ -15,7 +15,7 @@ export interface AuthSessionDocument {
 
 const authSessionSchema = new Schema<AuthSessionDocument>(
   {
-    userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     tokenHash: { type: String, required: true, unique: true },
     previousTokenHash: { type: String, default: null, index: true },
     expiresAt: { type: Date, required: true },
@@ -30,4 +30,4 @@ authSessionSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 export const AuthSession =
   (mongoose.models.AuthSession as Model<AuthSessionDocument> | undefined) ??
-  mongoose.model<AuthSessionDocument>("AuthSession", authSessionSchema);
+  mongoose.model<AuthSessionDocument>('AuthSession', authSessionSchema);

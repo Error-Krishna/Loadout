@@ -1,18 +1,18 @@
-import { createHash, randomBytes } from "node:crypto";
-import bcrypt from "bcryptjs";
-import { Router } from "express";
-import rateLimit from "express-rate-limit";
-import jwt from "jsonwebtoken";
-import { AuthSession } from "./auth-session.model.js";
-import { loginSchema, registerSchema } from "./auth.schemas.js";
-import { env } from "../../config/env.js";
-import { requireAuth, type AuthPrincipal } from "../../common/middleware/require-auth.js";
-import { User, type UserRecord } from "../users/user.model.js";
+import { createHash, randomBytes } from 'node:crypto';
+import bcrypt from 'bcryptjs';
+import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
+import jwt from 'jsonwebtoken';
+import { AuthSession } from './auth-session.model.js';
+import { loginSchema, registerSchema } from './auth.schemas.js';
+import { env } from '../../config/env.js';
+import { requireAuth, type AuthPrincipal } from '../../common/middleware/require-auth.js';
+import { User, type UserRecord } from '../users/user.model.js';
 
 const router = Router();
 const SESSION_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
-const REFRESH_COOKIE = "refreshToken";
-const COOKIE_PATH = "/api/v1/auth";
+const REFRESH_COOKIE = 'refreshToken';
+const COOKIE_PATH = '/api/v1/auth';
 
 const authRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -30,25 +30,25 @@ const refreshRateLimit = rateLimit({
 
 const cookieOptions = {
   httpOnly: true,
-  secure: env.NODE_ENV === "production",
-  sameSite: "lax" as const,
+  secure: env.NODE_ENV === 'production',
+  sameSite: 'lax' as const,
   path: COOKIE_PATH,
 };
 
 function hashToken(token: string): string {
-  return createHash("sha256").update(token).digest("hex");
+  return createHash('sha256').update(token).digest('hex');
 }
 
 function newRefreshToken(): string {
-  return randomBytes(48).toString("base64url");
+  return randomBytes(48).toString('base64url');
 }
 
 function createAccessToken(user: UserRecord): string {
   return jwt.sign({ role: user.role }, env.JWT_ACCESS_SECRET, {
     subject: user._id.toString(),
-    expiresIn: "15m",
-    issuer: "mern-starter-api",
-    audience: "mern-starter-web",
+    expiresIn: '15m',
+    issuer: 'mern-starter-api',
+    audience: 'mern-starter-web',
   });
 }
 
@@ -61,18 +61,18 @@ function publicUser(user: UserRecord) {
   };
 }
 
-function sendUnauthorized(res: Parameters<import("express").RequestHandler>[1]): void {
+function sendUnauthorized(res: Parameters<import('express').RequestHandler>[1]): void {
   res.status(401).json({
     success: false,
-    error: { code: "INVALID_CREDENTIALS", message: "Invalid or expired credentials" },
+    error: { code: 'INVALID_CREDENTIALS', message: 'Invalid or expired credentials' },
     requestId: res.locals.requestId,
   });
 }
 
 async function startSession(
   user: UserRecord,
-  req: import("express").Request,
-  res: import("express").Response,
+  req: import('express').Request,
+  res: import('express').Response,
 ) {
   const rawRefreshToken = newRefreshToken();
   await AuthSession.create({
@@ -81,7 +81,7 @@ async function startSession(
     previousTokenHash: null,
     expiresAt: new Date(Date.now() + SESSION_LIFETIME_MS),
     revokedAt: null,
-    userAgent: req.get("user-agent")?.slice(0, 512),
+    userAgent: req.get('user-agent')?.slice(0, 512),
     ipAddress: req.ip?.slice(0, 128),
   });
 
@@ -96,18 +96,18 @@ async function startSession(
   };
 }
 
-function clearRefreshCookie(res: import("express").Response): void {
+function clearRefreshCookie(res: import('express').Response): void {
   res.clearCookie(REFRESH_COOKIE, cookieOptions);
 }
 
-router.post("/register", authRateLimit, async (req, res, next) => {
+router.post('/register', authRateLimit, async (req, res, next) => {
   try {
     const input = registerSchema.parse(req.body);
-    const existing = await User.findOne({ email: input.email }).select("_id");
+    const existing = await User.findOne({ email: input.email }).select('_id');
     if (existing) {
       res.status(409).json({
         success: false,
-        error: { code: "EMAIL_IN_USE", message: "An account with this email already exists" },
+        error: { code: 'EMAIL_IN_USE', message: 'An account with this email already exists' },
         requestId: res.locals.requestId,
       });
       return;
@@ -118,16 +118,16 @@ router.post("/register", authRateLimit, async (req, res, next) => {
       name: input.name,
       email: input.email,
       passwordHash,
-      role: "user",
+      role: 'user',
     });
     const session = await startSession(user, req, res);
 
     res.status(201).json({ success: true, data: session });
   } catch (error) {
-    if (typeof error === "object" && error !== null && "code" in error && error.code === 11000) {
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === 11000) {
       res.status(409).json({
         success: false,
-        error: { code: "EMAIL_IN_USE", message: "An account with this email already exists" },
+        error: { code: 'EMAIL_IN_USE', message: 'An account with this email already exists' },
         requestId: res.locals.requestId,
       });
       return;
@@ -136,10 +136,10 @@ router.post("/register", authRateLimit, async (req, res, next) => {
   }
 });
 
-router.post("/login", authRateLimit, async (req, res, next) => {
+router.post('/login', authRateLimit, async (req, res, next) => {
   try {
     const input = loginSchema.parse(req.body);
-    const user = await User.findOne({ email: input.email }).select("+passwordHash");
+    const user = await User.findOne({ email: input.email }).select('+passwordHash');
 
     if (!user || !(await bcrypt.compare(input.password, user.passwordHash))) {
       sendUnauthorized(res);
@@ -153,10 +153,10 @@ router.post("/login", authRateLimit, async (req, res, next) => {
   }
 });
 
-router.post("/refresh", refreshRateLimit, async (req, res, next) => {
+router.post('/refresh', refreshRateLimit, async (req, res, next) => {
   try {
     const rawToken: unknown = req.cookies?.[REFRESH_COOKIE];
-    if (typeof rawToken !== "string" || rawToken.length < 32) {
+    if (typeof rawToken !== 'string' || rawToken.length < 32) {
       clearRefreshCookie(res);
       sendUnauthorized(res);
       return;
@@ -242,10 +242,10 @@ router.post("/refresh", refreshRateLimit, async (req, res, next) => {
   }
 });
 
-router.post("/logout", async (req, res, next) => {
+router.post('/logout', async (req, res, next) => {
   try {
     const rawToken: unknown = req.cookies?.[REFRESH_COOKIE];
-    if (typeof rawToken === "string" && rawToken.length >= 32) {
+    if (typeof rawToken === 'string' && rawToken.length >= 32) {
       const tokenHash = hashToken(rawToken);
       await AuthSession.findOneAndUpdate(
         {
@@ -263,7 +263,7 @@ router.post("/logout", async (req, res, next) => {
   }
 });
 
-router.get("/me", requireAuth, async (_req, res, next) => {
+router.get('/me', requireAuth, async (_req, res, next) => {
   try {
     const principal = res.locals.authUser as AuthPrincipal;
     const user = await User.findById(principal.userId);

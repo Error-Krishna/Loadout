@@ -1,12 +1,12 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
-import { apiClient } from "../lib/api/client";
-import { setAccessToken } from "./access-token";
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import { apiClient } from '../lib/api/client';
+import { setAccessToken } from './access-token';
 
 export interface AuthUser {
   id: string;
   name: string;
   email: string;
-  role: "user" | "admin";
+  role: 'user' | 'admin';
 }
 
 interface AuthEnvelope {
@@ -33,7 +33,7 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-function applyAuthPayload(payload: AuthEnvelope["data"], setUser: (user: AuthUser) => void) {
+function applyAuthPayload(payload: AuthEnvelope['data'], setUser: (user: AuthUser) => void) {
   setAccessToken(payload.accessToken);
   setUser(payload.user);
 }
@@ -46,7 +46,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     apiClient
-      .post<AuthEnvelope>("/auth/refresh")
+      .post<AuthEnvelope>('/auth/refresh')
       .then(({ data }) => {
         if (!cancelled) applyAuthPayload(data.data, setUser);
       })
@@ -66,18 +66,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
-    const { data } = await apiClient.post<AuthEnvelope>("/auth/login", { email, password });
+    const { data } = await apiClient.post<AuthEnvelope>('/auth/login', { email, password });
     applyAuthPayload(data.data, setUser);
   }, []);
 
   const register = useCallback(async (input: RegisterInput) => {
-    const { data } = await apiClient.post<AuthEnvelope>("/auth/register", input);
+    const { data } = await apiClient.post<AuthEnvelope>('/auth/register', input);
     applyAuthPayload(data.data, setUser);
   }, []);
 
   const logout = useCallback(async () => {
     try {
-      await apiClient.post("/auth/logout");
+      await apiClient.post('/auth/logout');
     } finally {
       setAccessToken(null);
       setUser(null);
@@ -93,6 +93,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export function useAuth(): AuthContextValue {
   const value = useContext(AuthContext);
-  if (!value) throw new Error("useAuth must be used within AuthProvider");
+  if (!value) throw new Error('useAuth must be used within AuthProvider');
   return value;
 }

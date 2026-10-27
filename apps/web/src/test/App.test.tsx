@@ -15,8 +15,6 @@ describe('App', () => {
     expect(screen.getByRole('navigation', { name: 'Main Navigation' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'New Analysis' })).toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Analysis Pipeline Progress' })).toBeInTheDocument();
-    expect(
-      screen.getByRole('heading', { name: /drop your dataset here/i }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /drop your dataset here/i })).toBeInTheDocument();
   });
 });

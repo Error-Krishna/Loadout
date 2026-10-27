@@ -1,7 +1,7 @@
-import type { ErrorRequestHandler } from "express";
-import { ZodError } from "zod";
-import { AppError } from "../errors/app-error.js";
-import { logger } from "../../config/logger.js";
+import type { ErrorRequestHandler } from 'express';
+import { ZodError } from 'zod';
+import { AppError } from '../errors/app-error.js';
+import { logger } from '../../config/logger.js';
 
 export const errorHandler: ErrorRequestHandler = (error: unknown, req, res, next) => {
   if (res.headersSent) {
@@ -13,10 +13,10 @@ export const errorHandler: ErrorRequestHandler = (error: unknown, req, res, next
     res.status(400).json({
       success: false,
       error: {
-        code: "VALIDATION_ERROR",
-        message: "Request validation failed",
+        code: 'VALIDATION_ERROR',
+        message: 'Request validation failed',
         details: error.issues.map((issue) => ({
-          path: issue.path.join("."),
+          path: issue.path.join('.'),
           message: issue.message,
         })),
       },
@@ -44,14 +44,14 @@ export const errorHandler: ErrorRequestHandler = (error: unknown, req, res, next
       method: req.method,
       path: req.path,
     },
-    "Unhandled request error",
+    'Unhandled request error',
   );
 
   res.status(500).json({
     success: false,
     error: {
-      code: "INTERNAL_SERVER_ERROR",
-      message: "An unexpected error occurred",
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'An unexpected error occurred',
     },
     requestId: res.locals.requestId,
   });

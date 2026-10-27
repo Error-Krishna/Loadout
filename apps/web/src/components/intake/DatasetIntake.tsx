@@ -104,9 +104,7 @@ export default function DatasetIntake({ onDatasetLoaded }: DatasetIntakeProps) {
           className="p-4 rounded-lg bg-rose-950/40 border border-rose-800/60 text-rose-200 text-sm flex items-start justify-between"
         >
           <div>
-            <strong className="block font-semibold text-rose-300">
-              {validationError.title}
-            </strong>
+            <strong className="block font-semibold text-rose-300">{validationError.title}</strong>
             <span>{validationError.message}</span>
           </div>
           <button
@@ -149,7 +147,9 @@ export default function DatasetIntake({ onDatasetLoaded }: DatasetIntakeProps) {
           </div>
           <div>
             <h3 className="text-base font-semibold text-slate-100">
-              {isProcessing ? 'Reading file into memory...' : 'Drop your dataset here, or browse files'}
+              {isProcessing
+                ? 'Reading file into memory...'
+                : 'Drop your dataset here, or browse files'}
             </h3>
             <p className="text-xs text-slate-400 mt-1">
               Supports <strong className="text-slate-300">.csv</strong> and{' '}
@@ -192,9 +192,7 @@ export default function DatasetIntake({ onDatasetLoaded }: DatasetIntakeProps) {
                 <h5 className="text-sm font-medium text-slate-200 group-hover:text-white">
                   {preset.label}
                 </h5>
-                <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                  {preset.description}
-                </p>
+                <p className="text-xs text-slate-400 mt-1 leading-relaxed">{preset.description}</p>
               </div>
               <div className="mt-4 pt-2 border-t border-slate-800/60 text-[11px] font-mono text-cyan-400/80 group-hover:text-cyan-300 flex items-center gap-1">
                 Load Workload →

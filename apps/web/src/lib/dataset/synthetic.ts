@@ -18,13 +18,21 @@ export const SYNTHETIC_PRESETS: SyntheticPreset[] = [
   {
     id: 'metrics-50k',
     label: '50,000 System Metrics',
-    description: 'High-frequency telemetry (CPU, memory, disk I/O) ideal for virtual table stress testing.',
+    description:
+      'High-frequency telemetry (CPU, memory, disk I/O) ideal for virtual table stress testing.',
     rowCount: 50_000,
     format: 'csv',
   },
 ];
 
-const EVENT_NAMES = ['page_view', 'click', 'api_request', 'db_query', 'auth_token_refresh', 'cache_miss'];
+const EVENT_NAMES = [
+  'page_view',
+  'click',
+  'api_request',
+  'db_query',
+  'auth_token_refresh',
+  'cache_miss',
+];
 const HTTP_CODES = [200, 200, 200, 201, 204, 400, 401, 404, 500, 502];
 const ROLES = ['engineer', 'viewer', 'billing_admin', 'auditor', 'team_lead'];
 
