@@ -30,10 +30,10 @@ describe('DatasetCompareLab', () => {
     expect(screen.getByText(/performance lab comparison/i)).toBeInTheDocument();
     expect(screen.getByText('Mounted DOM Nodes')).toBeInTheDocument();
     expect(screen.getByText('Render Duration')).toBeInTheDocument();
-    expect(screen.getByText('Virtualized (60 FPS)')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^virtualized$/i })).toBeInTheDocument();
   });
 
-  it('allows toggling between baseline and virtualized modes', () => {
+  it('allows toggling between baseline, progressive, and virtualized modes', () => {
     const handleImplement = vi.fn();
     const handleBack = vi.fn();
 
@@ -45,15 +45,21 @@ describe('DatasetCompareLab', () => {
       />,
     );
 
-    const baselineBtn = screen.getByText('Baseline (Naive)');
+    // 1. Baseline mode
+    const baselineBtn = screen.getByRole('button', { name: /^baseline$/i });
     fireEvent.click(baselineBtn);
-
     expect(screen.getByText('O(N) Linear')).toBeInTheDocument();
     expect(screen.getByText(/naive dom cap/i)).toBeInTheDocument();
 
-    const virtualBtn = screen.getByText('Virtualized (60 FPS)');
-    fireEvent.click(virtualBtn);
+    // 2. Progressive chunking mode
+    const progressiveBtn = screen.getByRole('button', { name: /^progressive$/i });
+    fireEvent.click(progressiveBtn);
+    expect(screen.getByText('O(Batch) Streaming')).toBeInTheDocument();
+    expect(screen.getByText(/batch size/i)).toBeInTheDocument();
 
+    // 3. Virtualized mode
+    const virtualBtn = screen.getByRole('button', { name: /^virtualized$/i });
+    fireEvent.click(virtualBtn);
     expect(screen.getByText('O(1) Constant')).toBeInTheDocument();
   });
 });

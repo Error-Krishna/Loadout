@@ -12,7 +12,7 @@ describe('DatasetImplementationGuide', () => {
     isSynthetic: true,
   };
 
-  it('renders copyable code block and gotchas matrix', () => {
+  it('renders copyable code block and gotchas matrix with tab navigation', () => {
     const handleProceed = vi.fn();
     const handleBack = vi.fn();
 
@@ -24,12 +24,19 @@ describe('DatasetImplementationGuide', () => {
       />,
     );
 
-    expect(screen.getByText('TanStack Virtual Integration')).toBeInTheDocument();
+    // Initial tab: Virtualization
+    expect(screen.getByText('DOM Virtualization (TanStack Virtual)')).toBeInTheDocument();
     expect(screen.getByText(/pnpm add @tanstack\/react-virtual/i)).toBeInTheDocument();
-    expect(screen.getByText('Copy React Component')).toBeInTheDocument();
+    expect(screen.getByText('Copy Code Template')).toBeInTheDocument();
     expect(screen.getByText('1. Browser Ctrl+F')).toBeInTheDocument();
     expect(screen.getByText('2. Dynamic Heights')).toBeInTheDocument();
     expect(screen.getByText('3. Keyboard Focus')).toBeInTheDocument();
+
+    // Switch to Progressive Chunking tab
+    const chunkingTab = screen.getByText('2. Progressive Chunking');
+    fireEvent.click(chunkingTab);
+    expect(screen.getByText('Progressive Chunking (Time-Slicing)')).toBeInTheDocument();
+    expect(screen.getByText('Native Browser API (Zero Dependencies)')).toBeInTheDocument();
   });
 
   it('updates completed items count in the verification checklist', () => {

@@ -80,6 +80,18 @@ export interface FilterTelemetry {
   matchesCount: number;
 }
 
+export type TableMode = 'baseline' | 'virtualized' | 'chunked';
+
+export interface ProgressiveChunkTelemetry {
+  mountedCount: number;
+  totalCount: number;
+  isComplete: boolean;
+  yieldCycles: number;
+  initialChunkDurationMs: number;
+  totalDurationMs: number;
+  chunkSize: number;
+}
+
 export type OptimizationGoal = 'first-render' | 'memory' | 'interaction' | 'balanced';
 export type DeviceTarget = 'desktop' | 'mobile-constrained';
 

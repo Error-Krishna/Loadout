@@ -1,16 +1,15 @@
 import { useMemo, useState, useRef, useEffect } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import type { LoadedDataset } from '../../types/dataset';
+import type { LoadedDataset, TableMode } from '../../types/dataset';
 import { parseDatasetRows } from '../../lib/dataset/parser';
 import { useDatasetFilter } from '../../hooks/useDatasetFilter';
+import { useProgressiveChunking } from '../../hooks/useProgressiveChunking';
 
 interface DatasetCompareLabProps {
   dataset: LoadedDataset;
   onProceedToImplement: () => void;
   onBackToProfile: () => void;
 }
-
-export type TableMode = 'baseline' | 'virtualized';
 
 export default function DatasetCompareLab({
   dataset,
@@ -19,6 +18,7 @@ export default function DatasetCompareLab({
 }: DatasetCompareLabProps) {
   const [mode, setMode] = useState<TableMode>('virtualized');
   const [baselineCap, setBaselineCap] = useState<number>(1000);
+  const [chunkSize, setChunkSize] = useState<number>(100);
   const [renderDuration, setRenderDuration] = useState<number>(0);
 
   // Search & Filtering States
@@ -44,7 +44,18 @@ export default function DatasetCompareLab({
     useWorker: useWorkerFilter,
   });
 
-  // 3. Virtualizer setup using filtered rows
+  // 3. Progressive chunking hook for time-sliced mounting
+  const {
+    chunkedItems,
+    telemetry: chunkTelemetry,
+    progressPercent,
+  } = useProgressiveChunking({
+    items: filteredRows,
+    chunkSize,
+    enabled: mode === 'chunked',
+  });
+
+  // 4. Virtualizer setup using filtered rows
   const parentRef = useRef<HTMLDivElement>(null);
   const rowVirtualizer = useVirtualizer({
     count: filteredRows.length,
@@ -54,10 +65,15 @@ export default function DatasetCompareLab({
   });
 
   const virtualItems = rowVirtualizer.getVirtualItems();
-  const visibleCount = mode === 'virtualized' ? virtualItems.length : filteredRows.length;
+  const visibleCount =
+    mode === 'virtualized'
+      ? virtualItems.length
+      : mode === 'chunked'
+        ? chunkedItems.length
+        : filteredRows.length;
   const domNodeCount = visibleCount * (columns.length + 1);
 
-  // 4. Measure render paint timing
+  // 5. Measure render paint timing
   useEffect(() => {
     const start = performance.now();
     const rafId = requestAnimationFrame(() => {
@@ -145,7 +161,7 @@ export default function DatasetCompareLab({
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
-                Web Worker (Async)
+                Web Worker (Off-thread)
               </button>
             </div>
           </div>
@@ -190,7 +206,7 @@ export default function DatasetCompareLab({
             Rendering Strategy
           </span>
 
-          <div className="flex rounded-md p-1 bg-slate-950 border border-slate-800">
+          <div className="flex rounded-md p-1 bg-slate-950 border border-slate-800 gap-1">
             <button
               type="button"
               onClick={() => setMode('baseline')}
@@ -200,7 +216,18 @@ export default function DatasetCompareLab({
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              Baseline (Naive)
+              Baseline
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode('chunked')}
+              className={`flex-1 py-1.5 text-xs font-mono rounded transition-colors ${
+                mode === 'chunked'
+                  ? 'bg-indigo-950 text-indigo-300 border border-indigo-800 font-bold'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Progressive
             </button>
             <button
               type="button"
@@ -211,11 +238,11 @@ export default function DatasetCompareLab({
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              Virtualized (60 FPS)
+              Virtualized
             </button>
           </div>
 
-          {mode === 'baseline' ? (
+          {mode === 'baseline' && (
             <div className="space-y-2 pt-2 border-t border-slate-800">
               <div className="flex justify-between text-xs font-mono">
                 <span className="text-slate-400">Naive DOM Cap:</span>
@@ -231,10 +258,41 @@ export default function DatasetCompareLab({
                 className="w-full accent-rose-500 cursor-pointer"
               />
               <p className="text-[11px] text-slate-400 leading-tight">
-                ⚠️ Bounded at 5,000 rows to prevent tab crash.
+                ⚠️ Bounded at 5,000 rows to prevent tab crash from synchronous mounting.
               </p>
             </div>
-          ) : (
+          )}
+
+          {mode === 'chunked' && (
+            <div className="space-y-2 pt-2 border-t border-slate-800">
+              <div className="flex justify-between text-xs font-mono">
+                <span className="text-slate-400">Batch Size:</span>
+                <span className="text-indigo-300 font-bold">{chunkSize} rows / idle frame</span>
+              </div>
+              <div className="flex gap-2">
+                {[50, 100, 250].map((size) => (
+                  <button
+                    key={size}
+                    type="button"
+                    onClick={() => setChunkSize(size)}
+                    className={`flex-1 py-1 text-xs font-mono rounded ${
+                      chunkSize === size
+                        ? 'bg-indigo-900/60 text-indigo-200 border border-indigo-700 font-bold'
+                        : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800'
+                    }`}
+                  >
+                    {size}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] text-slate-400 leading-tight">
+                ⚡ Time-sliced batch mounting via requestIdleCallback. Preserves UI responsiveness
+                without scroll container constraints.
+              </p>
+            </div>
+          )}
+
+          {mode === 'virtualized' && (
             <div className="pt-2 border-t border-slate-800">
               <p className="text-xs text-slate-300 leading-relaxed font-mono">
                 ✨ Virtualization mounts only viewport items. Scalable to 100,000+ rows with
@@ -253,15 +311,25 @@ export default function DatasetCompareLab({
                 className={`text-[10px] font-mono px-2 py-0.5 rounded uppercase font-bold ${
                   mode === 'virtualized'
                     ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/60'
-                    : 'bg-rose-950 text-rose-300 border border-rose-800/60'
+                    : mode === 'chunked'
+                      ? 'bg-indigo-950 text-indigo-300 border border-indigo-800/60'
+                      : 'bg-rose-950 text-rose-300 border border-rose-800/60'
                 }`}
               >
-                {mode === 'virtualized' ? 'O(1) Constant' : 'O(N) Linear'}
+                {mode === 'virtualized'
+                  ? 'O(1) Constant'
+                  : mode === 'chunked'
+                    ? 'O(Batch) Streaming'
+                    : 'O(N) Linear'}
               </span>
             </div>
             <p
               className={`text-3xl font-bold font-mono mt-2 ${
-                mode === 'virtualized' ? 'text-emerald-400' : 'text-rose-400'
+                mode === 'virtualized'
+                  ? 'text-emerald-400'
+                  : mode === 'chunked'
+                    ? 'text-indigo-400'
+                    : 'text-rose-400'
               }`}
             >
               {domNodeCount.toLocaleString()}
@@ -270,7 +338,9 @@ export default function DatasetCompareLab({
           <p className="text-xs text-slate-400 mt-2">
             {mode === 'virtualized'
               ? `Only ~${visibleCount} rows rendered in viewport.`
-              : `All ${filteredRows.length.toLocaleString()} rows mounted simultaneously.`}
+              : mode === 'chunked'
+                ? `${chunkedItems.length.toLocaleString()} of ${filteredRows.length.toLocaleString()} rows mounted in DOM.`
+                : `All ${filteredRows.length.toLocaleString()} rows mounted simultaneously.`}
           </p>
         </div>
 
@@ -283,16 +353,22 @@ export default function DatasetCompareLab({
             </div>
             <p
               className={`text-3xl font-bold font-mono mt-2 ${
-                mode === 'virtualized' ? 'text-cyan-400' : 'text-amber-400'
+                mode === 'virtualized'
+                  ? 'text-cyan-400'
+                  : mode === 'chunked'
+                    ? 'text-indigo-400'
+                    : 'text-amber-400'
               }`}
             >
-              {renderDuration} ms
+              {mode === 'chunked' ? chunkTelemetry.initialChunkDurationMs : renderDuration} ms
             </p>
           </div>
           <p className="text-xs text-slate-400 mt-2">
             {mode === 'virtualized'
               ? 'Instantaneous mount (<16ms 60 FPS frame budget).'
-              : 'Main-thread DOM mounting overhead.'}
+              : mode === 'chunked'
+                ? `First batch paint. Total hydration: ${chunkTelemetry.totalDurationMs} ms (${chunkTelemetry.yieldCycles} idle yields).`
+                : 'Main-thread synchronous DOM mounting overhead.'}
           </p>
         </div>
       </div>
@@ -300,11 +376,41 @@ export default function DatasetCompareLab({
       {/* Interactive Table Viewport */}
       <div className="border border-slate-800 bg-[var(--color-surface)] rounded-lg overflow-hidden shadow-lg">
         <div className="border-b border-slate-800 px-4 py-2 bg-slate-900 flex items-center justify-between text-xs font-mono text-slate-400">
-          <span>Displaying {filteredRows.length.toLocaleString()} rows</span>
+          <span>
+            Displaying{' '}
+            {(mode === 'chunked' ? chunkedItems.length : filteredRows.length).toLocaleString()} rows
+          </span>
           <span className="text-cyan-400">
             Scroll inside the viewport to test frame responsiveness
           </span>
         </div>
+
+        {/* Progressive Streaming Banner */}
+        {mode === 'chunked' && (
+          <div className="px-4 py-2 bg-indigo-950/40 border-b border-indigo-800/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs font-mono">
+            <div className="flex items-center gap-2">
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  chunkTelemetry.isComplete ? 'bg-emerald-400' : 'bg-indigo-400 animate-pulse'
+                }`}
+              />
+              <span className="text-indigo-200">
+                {chunkTelemetry.isComplete
+                  ? `✓ All ${chunkTelemetry.mountedCount.toLocaleString()} rows mounted across ${chunkTelemetry.yieldCycles} idle frames (0ms UI freeze)`
+                  : `⚡ Progressively mounting: ${chunkTelemetry.mountedCount.toLocaleString()} of ${filteredRows.length.toLocaleString()} rows (Chunk ${chunkTelemetry.yieldCycles + 1})`}
+              </span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-28 bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                <div
+                  className="bg-indigo-500 h-full transition-all duration-150"
+                  style={{ width: `${progressPercent}%` }}
+                />
+              </div>
+              <span className="text-indigo-300 font-bold">{progressPercent}%</span>
+            </div>
+          </div>
+        )}
 
         <div
           ref={parentRef}
@@ -368,7 +474,7 @@ export default function DatasetCompareLab({
               })}
             </div>
           ) : (
-            /* Naive Unvirtualized Table Body */
+            /* DOM Table Body (Naive or Progressive Chunked) */
             <table className="w-full text-left">
               <thead className="sticky top-0 bg-slate-900 border-b border-slate-800 text-slate-300">
                 <tr>
@@ -381,7 +487,7 @@ export default function DatasetCompareLab({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
-                {filteredRows.map((row, idx) => (
+                {(mode === 'chunked' ? chunkedItems : filteredRows).map((row, idx) => (
                   <tr
                     key={idx}
                     className={`hover:bg-slate-800/40 ${
