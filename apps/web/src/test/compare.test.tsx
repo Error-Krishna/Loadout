@@ -27,7 +27,7 @@ describe('DatasetCompareLab', () => {
     );
 
     expect(screen.getByText('team.csv')).toBeInTheDocument();
-    expect(screen.getByText(/performance lab • side-by-side comparison/i)).toBeInTheDocument();
+    expect(screen.getByText(/performance lab comparison/i)).toBeInTheDocument();
     expect(screen.getByText('Mounted DOM Nodes')).toBeInTheDocument();
     expect(screen.getByText('Render Duration')).toBeInTheDocument();
     expect(screen.getByText('Virtualized (60 FPS)')).toBeInTheDocument();

@@ -2,6 +2,7 @@ import { useMemo, useState, useRef, useEffect } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { LoadedDataset } from '../../types/dataset';
 import { parseDatasetRows } from '../../lib/dataset/parser';
+import { useDatasetFilter } from '../../hooks/useDatasetFilter';
 
 interface DatasetCompareLabProps {
   dataset: LoadedDataset;
@@ -20,40 +21,51 @@ export default function DatasetCompareLab({
   const [baselineCap, setBaselineCap] = useState<number>(1000);
   const [renderDuration, setRenderDuration] = useState<number>(0);
 
-  // Parse rows based on active mode
-  const { columns, rows, totalRows } = useMemo(() => {
+  // Search & Filtering States
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [useWorkerFilter, setUseWorkerFilter] = useState<boolean>(true);
+
+  // 1. Parse initial rows based on active mode cap
+  const { columns, rawRows, totalRows } = useMemo(() => {
     const limit = mode === 'baseline' ? baselineCap : undefined;
     const result = parseDatasetRows(dataset, limit);
     return {
       columns: result.columns,
-      rows: result.rows,
+      rawRows: result.rows,
       totalRows: dataset.rowCountEstimate ?? result.rows.length,
     };
   }, [dataset, mode, baselineCap]);
 
-  // Virtualizer setup
+  // 2. Filter rows using Web Worker or Main Thread
+  const { filteredRows, telemetry: filterTelemetry } = useDatasetFilter({
+    rows: rawRows,
+    columns,
+    query: searchQuery,
+    useWorker: useWorkerFilter,
+  });
+
+  // 3. Virtualizer setup using filtered rows
   const parentRef = useRef<HTMLDivElement>(null);
   const rowVirtualizer = useVirtualizer({
-    count: rows.length,
+    count: filteredRows.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => 36, // 36px row height
     overscan: 5,
   });
 
   const virtualItems = rowVirtualizer.getVirtualItems();
-  const visibleCount = mode === 'virtualized' ? virtualItems.length : rows.length;
+  const visibleCount = mode === 'virtualized' ? virtualItems.length : filteredRows.length;
   const domNodeCount = visibleCount * (columns.length + 1);
 
-  // Measure render timing
+  // 4. Measure render paint timing
   useEffect(() => {
     const start = performance.now();
-    // Request animation frame to measure paint completion
     const rafId = requestAnimationFrame(() => {
       const duration = performance.now() - start;
       setRenderDuration(Number(duration.toFixed(2)));
     });
     return () => cancelAnimationFrame(rafId);
-  }, [mode, baselineCap, dataset]);
+  }, [mode, baselineCap, dataset, filteredRows.length]);
 
   return (
     <div className="w-full max-w-7xl mx-auto space-y-6">
@@ -61,7 +73,7 @@ export default function DatasetCompareLab({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-lg border border-slate-800 bg-slate-900/60">
         <div>
           <span className="text-xs font-mono text-cyan-400 uppercase tracking-wider">
-            Performance Lab • Side-by-Side Comparison
+            Step 04 • Performance Lab Comparison
           </span>
           <h2 className="text-lg font-bold text-slate-100">{dataset.name}</h2>
           <p className="text-xs text-slate-400 font-mono">
@@ -86,12 +98,96 @@ export default function DatasetCompareLab({
         </div>
       </div>
 
+      {/* Real-Time Interactive Search Bar */}
+      <div className="p-4 rounded-lg border border-slate-800 bg-[var(--color-surface)] space-y-3">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="flex-1 relative">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={`Search ${rawRows.length.toLocaleString()} rows in real time...`}
+              className="w-full px-4 py-2 rounded-lg bg-slate-950 border border-slate-800 focus:border-cyan-400 focus:outline-none text-xs font-mono text-slate-100 placeholder-slate-500"
+              aria-label="Filter dataset search query"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-2 text-xs font-mono text-slate-500 hover:text-slate-300"
+              >
+                ✕ Clear
+              </button>
+            )}
+          </div>
+
+          {/* Worker vs Main Thread Filter Toggle */}
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-xs font-mono text-slate-400">Search Strategy:</span>
+            <div className="flex rounded-md p-0.5 bg-slate-950 border border-slate-800">
+              <button
+                type="button"
+                onClick={() => setUseWorkerFilter(false)}
+                className={`px-3 py-1 text-xs font-mono rounded transition-colors ${
+                  !useWorkerFilter
+                    ? 'bg-amber-950 text-amber-300 border border-amber-800 font-bold'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Main Thread (Sync)
+              </button>
+              <button
+                type="button"
+                onClick={() => setUseWorkerFilter(true)}
+                className={`px-3 py-1 text-xs font-mono rounded transition-colors ${
+                  useWorkerFilter
+                    ? 'bg-cyan-950 text-cyan-300 border border-cyan-800 font-bold'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Web Worker (Async)
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Search Compute Telemetry */}
+        {searchQuery && (
+          <div className="flex flex-wrap items-center gap-4 text-xs font-mono pt-2 border-t border-slate-800/80">
+            <span>
+              Matches:{' '}
+              <strong className="text-cyan-400 font-normal">
+                {filterTelemetry.matchesCount.toLocaleString()}
+              </strong>{' '}
+              / {rawRows.length.toLocaleString()}
+            </span>
+            <span>
+              Search Compute Duration:{' '}
+              <strong className="text-slate-200 font-normal">
+                {filterTelemetry.executionDurationMs} ms
+              </strong>
+            </span>
+            <span>
+              Main-Thread Lock Time:{' '}
+              <strong
+                className={`font-semibold ${
+                  filterTelemetry.mainThreadLockMs > 10 ? 'text-rose-400' : 'text-emerald-400'
+                }`}
+              >
+                {filterTelemetry.mainThreadLockMs} ms{' '}
+                {filterTelemetry.isWorker ? '(0ms UI Lock)' : '(UI Frozen)'}
+              </strong>
+            </span>
+          </div>
+        )}
+      </div>
+
       {/* Mode Controls & Live Telemetry */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Control Box */}
         <div className="p-4 rounded-lg border border-slate-800 bg-[var(--color-surface)] space-y-4">
           <span className="text-xs font-mono text-slate-400 uppercase tracking-wider">
-            Execution Strategy
+            Rendering Strategy
           </span>
 
           <div className="flex rounded-md p-1 bg-slate-950 border border-slate-800">
@@ -135,15 +231,14 @@ export default function DatasetCompareLab({
                 className="w-full accent-rose-500 cursor-pointer"
               />
               <p className="text-[11px] text-slate-400 leading-tight">
-                ⚠️ Bounded at 5,000 rows to prevent browser tab crash. Notice how render time and
-                memory climb.
+                ⚠️ Bounded at 5,000 rows to prevent tab crash.
               </p>
             </div>
           ) : (
             <div className="pt-2 border-t border-slate-800">
               <p className="text-xs text-slate-300 leading-relaxed font-mono">
-                ✨ Virtualization mounts only viewport items. All {totalRows.toLocaleString()} rows
-                remain accessible with O(1) DOM footprint.
+                ✨ Virtualization mounts only viewport items. Scalable to 100,000+ rows with
+                constant O(1) DOM footprint.
               </p>
             </div>
           )}
@@ -175,7 +270,7 @@ export default function DatasetCompareLab({
           <p className="text-xs text-slate-400 mt-2">
             {mode === 'virtualized'
               ? `Only ~${visibleCount} rows rendered in viewport.`
-              : `All ${rows.length.toLocaleString()} rows mounted simultaneously.`}
+              : `All ${filteredRows.length.toLocaleString()} rows mounted simultaneously.`}
           </p>
         </div>
 
@@ -205,9 +300,7 @@ export default function DatasetCompareLab({
       {/* Interactive Table Viewport */}
       <div className="border border-slate-800 bg-[var(--color-surface)] rounded-lg overflow-hidden shadow-lg">
         <div className="border-b border-slate-800 px-4 py-2 bg-slate-900 flex items-center justify-between text-xs font-mono text-slate-400">
-          <span>
-            Displaying {rows.length.toLocaleString()} of {totalRows.toLocaleString()} rows
-          </span>
+          <span>Displaying {filteredRows.length.toLocaleString()} rows</span>
           <span className="text-cyan-400">
             Scroll inside the viewport to test frame responsiveness
           </span>
@@ -242,7 +335,7 @@ export default function DatasetCompareLab({
 
               {/* Render only visible virtual items */}
               {virtualItems.map((virtualRow) => {
-                const row = rows[virtualRow.index];
+                const row = filteredRows[virtualRow.index];
                 if (!row) return null;
                 return (
                   <div
@@ -288,7 +381,7 @@ export default function DatasetCompareLab({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
-                {rows.map((row, idx) => (
+                {filteredRows.map((row, idx) => (
                   <tr
                     key={idx}
                     className={`hover:bg-slate-800/40 ${

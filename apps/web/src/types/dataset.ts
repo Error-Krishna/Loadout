@@ -60,6 +60,26 @@ export interface RenderBenchmarkMetrics {
   totalRowCount: number;
 }
 
+export interface FilterWorkerRequest {
+  id: number;
+  query: string;
+  rows: Record<string, unknown>[];
+  columns: string[];
+}
+
+export interface FilterWorkerResponse {
+  id: number;
+  filteredIndices: number[];
+  durationMs: number;
+}
+
+export interface FilterTelemetry {
+  executionDurationMs: number;
+  mainThreadLockMs: number;
+  isWorker: boolean;
+  matchesCount: number;
+}
+
 export type OptimizationGoal = 'first-render' | 'memory' | 'interaction' | 'balanced';
 export type DeviceTarget = 'desktop' | 'mobile-constrained';
 
