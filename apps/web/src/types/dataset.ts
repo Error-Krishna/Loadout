@@ -59,3 +59,49 @@ export interface RenderBenchmarkMetrics {
   visibleRowCount: number;
   totalRowCount: number;
 }
+
+export type OptimizationGoal = 'first-render' | 'memory' | 'interaction' | 'balanced';
+export type DeviceTarget = 'desktop' | 'mobile-constrained';
+
+export interface AnalysisConfiguration {
+  goal: OptimizationGoal;
+  deviceTarget: DeviceTarget;
+  maxMemoryMb: number;
+  localOnly: boolean;
+}
+
+export interface ChecklistItem {
+  id: string;
+  label: string;
+  description: string;
+  category: 'correctness' | 'accessibility' | 'performance';
+}
+
+export interface ExperimentReport {
+  id: string;
+  timestamp: string;
+  workloadName: string;
+  workloadFormat: DatasetFormat;
+  rowCount: number;
+  columnCount: number;
+  environment: {
+    userAgent: string;
+    platform: string;
+    date: string;
+  };
+  baselineMetrics: {
+    domNodes: number;
+    renderTimeMs: number;
+    memoryEstimateMb: number;
+  };
+  candidateMetrics: {
+    domNodes: number;
+    renderTimeMs: number;
+    technique: string;
+  };
+  improvementPct: {
+    domReduction: number;
+    timeReduction: number;
+  };
+  verifiedTradeoffs: string[];
+}

@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import type { WorkbenchView, AnalysisStep } from '../../types/navigation';
-import type { LoadedDataset } from '../../types/dataset';
+import type { LoadedDataset, AnalysisConfiguration } from '../../types/dataset';
 import DatasetIntake from '../intake/DatasetIntake';
+import AnalysisConfigView from '../configure/AnalysisConfigView';
 import DatasetProfileView from '../profile/DatasetProfileView';
 import DatasetCompareLab from '../compare/DatasetCompareLab';
+import DatasetImplementationGuide from '../implement/DatasetImplementationGuide';
+import DatasetReportView from '../report/DatasetReportView';
 
 const STEPS: { id: AnalysisStep; label: string; number: string }[] = [
   { id: 'input', label: 'Input', number: '01' },
@@ -23,15 +26,30 @@ const NAV_ITEMS: { id: WorkbenchView; label: string }[] = [
   { id: 'settings', label: 'Settings' },
 ];
 
+const DEFAULT_CONFIG: AnalysisConfiguration = {
+  goal: 'first-render',
+  deviceTarget: 'desktop',
+  maxMemoryMb: 50,
+  localOnly: true,
+};
+
 export default function AppShell() {
   const [activeView, setActiveView] = useState<WorkbenchView>('new-analysis');
   const [activeStep, setActiveStep] = useState<AnalysisStep>('input');
   const [dataset, setDataset] = useState<LoadedDataset | null>(null);
+  const [config, setConfig] = useState<AnalysisConfiguration>(DEFAULT_CONFIG);
 
   function handleDatasetLoaded(loaded: LoadedDataset) {
     setDataset(loaded);
-    setActiveStep('profile'); // Advance stepper to profile stage
+    setActiveStep('configure');
   }
+
+  function handleReset() {
+    setDataset(null);
+    setConfig(DEFAULT_CONFIG);
+    setActiveStep('input');
+  }
+
   return (
     <div className="flex flex-col min-h-screen bg-[var(--color-canvas)] text-slate-100 font-sans">
       {/* 1. Header Bar */}
@@ -85,15 +103,20 @@ export default function AppShell() {
           <ol className="flex items-center gap-2 max-w-5xl mx-auto overflow-x-auto">
             {STEPS.map((step, index) => {
               const isActive = activeStep === step.id;
+              const isAccessible = !dataset ? step.id === 'input' : true;
+
               return (
                 <li key={step.id} className="flex items-center gap-2 shrink-0">
                   <button
                     type="button"
+                    disabled={!isAccessible}
                     onClick={() => setActiveStep(step.id)}
                     className={`flex items-center gap-2 px-3 py-1 rounded text-xs transition-all ${
                       isActive
                         ? 'bg-cyan-950 text-cyan-300 border border-cyan-800/60 font-medium'
-                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+                        : isAccessible
+                          ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+                          : 'text-slate-600 cursor-not-allowed opacity-50'
                     }`}
                   >
                     <span className="font-mono text-[10px] opacity-60">{step.number}</span>
@@ -114,14 +137,19 @@ export default function AppShell() {
         {activeView === 'new-analysis' ? (
           activeStep === 'input' || !dataset ? (
             <DatasetIntake onDatasetLoaded={handleDatasetLoaded} />
+          ) : activeStep === 'configure' ? (
+            <AnalysisConfigView
+              dataset={dataset}
+              config={config}
+              onChangeConfig={setConfig}
+              onProceedToProfile={() => setActiveStep('profile')}
+              onBackToInput={handleReset}
+            />
           ) : activeStep === 'profile' ? (
             <DatasetProfileView
               dataset={dataset}
               onProceedToCompare={() => setActiveStep('compare')}
-              onChangeDataset={() => {
-                setDataset(null);
-                setActiveStep('input');
-              }}
+              onChangeDataset={handleReset}
             />
           ) : activeStep === 'compare' ? (
             <DatasetCompareLab
@@ -129,36 +157,18 @@ export default function AppShell() {
               onProceedToImplement={() => setActiveStep('implement')}
               onBackToProfile={() => setActiveStep('profile')}
             />
+          ) : activeStep === 'implement' ? (
+            <DatasetImplementationGuide
+              dataset={dataset}
+              onProceedToReport={() => setActiveStep('report')}
+              onBackToCompare={() => setActiveStep('compare')}
+            />
           ) : (
-            <div className="border border-slate-800 bg-[var(--color-surface)] rounded-lg p-6 space-y-4">
-              <div className="flex items-center justify-between pb-4 border-b border-slate-800">
-                <div>
-                  <span className="text-xs font-mono text-cyan-400 uppercase tracking-wider">
-                    Workload Active ({dataset.format.toUpperCase()})
-                  </span>
-                  <h3 className="text-lg font-semibold text-slate-100">{dataset.name}</h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDataset(null);
-                    setActiveStep('input');
-                  }}
-                  className="px-3 py-1.5 text-xs font-mono rounded bg-slate-800 hover:bg-slate-700 text-slate-300"
-                >
-                  Change Dataset
-                </button>
-              </div>
-
-              <div className="py-12 text-center text-slate-400">
-                <span className="inline-block px-2.5 py-1 text-xs font-mono rounded bg-cyan-950/70 text-cyan-400 border border-cyan-800/40 mb-3">
-                  Active Stage: {activeStep.toUpperCase()}
-                </span>
-                <p className="text-sm">
-                  Stage under construction. Proceeding to Performance Lab in next milestone.
-                </p>
-              </div>
-            </div>
+            <DatasetReportView
+              dataset={dataset}
+              onRestart={handleReset}
+              onBackToImplement={() => setActiveStep('implement')}
+            />
           )
         ) : (
           <div className="border border-slate-800 bg-[var(--color-surface)] rounded-lg p-8 text-center text-slate-400">
