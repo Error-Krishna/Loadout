@@ -3,6 +3,7 @@ import type { WorkbenchView, AnalysisStep } from '../../types/navigation';
 import type { LoadedDataset } from '../../types/dataset';
 import DatasetIntake from '../intake/DatasetIntake';
 import DatasetProfileView from '../profile/DatasetProfileView';
+import DatasetCompareLab from '../compare/DatasetCompareLab';
 
 const STEPS: { id: AnalysisStep; label: string; number: string }[] = [
   { id: 'input', label: 'Input', number: '01' },
@@ -121,6 +122,12 @@ export default function AppShell() {
                 setDataset(null);
                 setActiveStep('input');
               }}
+            />
+          ) : activeStep === 'compare' ? (
+            <DatasetCompareLab
+              dataset={dataset}
+              onProceedToImplement={() => setActiveStep('implement')}
+              onBackToProfile={() => setActiveStep('profile')}
             />
           ) : (
             <div className="border border-slate-800 bg-[var(--color-surface)] rounded-lg p-6 space-y-4">

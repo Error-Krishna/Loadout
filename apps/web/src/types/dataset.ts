@@ -52,3 +52,10 @@ export interface DatasetProfile {
   estimatedDomNodes: number;
   diagnostics: DiagnosticSignal[];
 }
+
+export interface RenderBenchmarkMetrics {
+  renderDurationMs: number;
+  domNodeCount: number;
+  visibleRowCount: number;
+  totalRowCount: number;
+}
