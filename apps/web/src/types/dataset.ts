@@ -21,3 +21,34 @@ export interface IntakeValidationError {
   title: string;
   message: string;
 }
+
+export type InferredType = 'string' | 'number' | 'boolean' | 'date';
+
+export interface ColumnProfile {
+  name: string;
+  type: InferredType;
+  nullCount: number;
+  sampleValues: (string | number | boolean | null)[];
+}
+
+export type DiagnosticSeverity = 'critical' | 'warning' | 'info';
+
+export interface DiagnosticSignal {
+  id: string;
+  severity: DiagnosticSeverity;
+  title: string;
+  description: string;
+  metric?: string;
+  recommendedTechnique: string;
+}
+
+export interface DatasetProfile {
+  rowCount: number;
+  columnCount: number;
+  columns: ColumnProfile[];
+  previewRows: Record<string, unknown>[];
+  rawSizeBytes: number;
+  estimatedHeapBytes: number;
+  estimatedDomNodes: number;
+  diagnostics: DiagnosticSignal[];
+}

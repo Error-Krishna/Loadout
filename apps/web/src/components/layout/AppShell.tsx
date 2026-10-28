@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { WorkbenchView, AnalysisStep } from '../../types/navigation';
 import type { LoadedDataset } from '../../types/dataset';
 import DatasetIntake from '../intake/DatasetIntake';
+import DatasetProfileView from '../profile/DatasetProfileView';
 
 const STEPS: { id: AnalysisStep; label: string; number: string }[] = [
   { id: 'input', label: 'Input', number: '01' },
@@ -110,22 +111,25 @@ export default function AppShell() {
       {/* 3. Main Workspace Area */}
       <main className="flex-1 p-6 max-w-7xl w-full mx-auto">
         {activeView === 'new-analysis' ? (
-          activeStep === 'input' ? (
+          activeStep === 'input' || !dataset ? (
             <DatasetIntake onDatasetLoaded={handleDatasetLoaded} />
+          ) : activeStep === 'profile' ? (
+            <DatasetProfileView
+              dataset={dataset}
+              onProceedToCompare={() => setActiveStep('compare')}
+              onChangeDataset={() => {
+                setDataset(null);
+                setActiveStep('input');
+              }}
+            />
           ) : (
             <div className="border border-slate-800 bg-[var(--color-surface)] rounded-lg p-6 space-y-4">
               <div className="flex items-center justify-between pb-4 border-b border-slate-800">
                 <div>
                   <span className="text-xs font-mono text-cyan-400 uppercase tracking-wider">
-                    Workload Loaded ({dataset?.format.toUpperCase()})
+                    Workload Active ({dataset.format.toUpperCase()})
                   </span>
-                  <h3 className="text-lg font-semibold text-slate-100">{dataset?.name}</h3>
-                  <p className="text-xs text-slate-400 font-mono">
-                    Size: {((dataset?.sizeBytes ?? 0) / 1024).toFixed(1)} KB •{' '}
-                    {dataset?.rowCountEstimate
-                      ? `Rows: ~${dataset.rowCountEstimate.toLocaleString()}`
-                      : 'Raw stream ready'}
-                  </p>
+                  <h3 className="text-lg font-semibold text-slate-100">{dataset.name}</h3>
                 </div>
                 <button
                   type="button"
@@ -144,8 +148,7 @@ export default function AppShell() {
                   Active Stage: {activeStep.toUpperCase()}
                 </span>
                 <p className="text-sm">
-                  Dataset is in browser memory. Next milestone: Profiling schema, row counts, and
-                  bottleneck detection.
+                  Stage under construction. Proceeding to Performance Lab in next milestone.
                 </p>
               </div>
             </div>
