@@ -1,19 +1,30 @@
 import { useMemo, useState } from 'react';
-import type { LoadedDataset } from '../../types/dataset';
+import type { LoadedDataset, AnalysisConfiguration } from '../../types/dataset';
 import { profileDataset } from '../../lib/dataset/profiler';
+import { rankRecommendations } from '../../lib/dataset/recommendation';
 
 interface DatasetProfileViewProps {
   dataset: LoadedDataset;
+  config?: AnalysisConfiguration;
   onProceedToCompare: () => void;
   onChangeDataset: () => void;
 }
 
+const DEFAULT_FALLBACK_CONFIG: AnalysisConfiguration = {
+  goal: 'first-render',
+  deviceTarget: 'desktop',
+  maxMemoryMb: 50,
+  localOnly: true,
+};
+
 export default function DatasetProfileView({
   dataset,
+  config = DEFAULT_FALLBACK_CONFIG,
   onProceedToCompare,
   onChangeDataset,
 }: DatasetProfileViewProps) {
   const profile = useMemo(() => profileDataset(dataset), [dataset]);
+  const recommendations = useMemo(() => rankRecommendations(profile, config), [profile, config]);
   const [activeTab, setActiveTab] = useState<'schema' | 'preview'>('schema');
 
   const heapMb = (profile.estimatedHeapBytes / (1024 * 1024)).toFixed(1);
@@ -25,9 +36,14 @@ export default function DatasetProfileView({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-lg border border-slate-800 bg-slate-900/60">
         <div>
           <span className="text-xs font-mono text-cyan-400 uppercase tracking-wider">
-            Workload Profiled • {dataset.format.toUpperCase()}
+            Step 03 • Workload Profile & Recommendations
           </span>
           <h2 className="text-lg font-bold text-slate-100">{dataset.name}</h2>
+          <p className="text-xs text-slate-400 font-mono mt-0.5">
+            Goal: <span className="text-cyan-300 font-semibold">{config.goal}</span> • Target:{' '}
+            <span className="text-slate-300">{config.deviceTarget}</span> • Memory Cap:{' '}
+            <span className="text-slate-300">{config.maxMemoryMb} MB</span>
+          </p>
         </div>
         <div className="flex items-center gap-3">
           <button
@@ -42,7 +58,7 @@ export default function DatasetProfileView({
             onClick={onProceedToCompare}
             className="px-4 py-1.5 text-xs font-semibold rounded bg-cyan-500 hover:bg-cyan-400 text-slate-950 transition-colors flex items-center gap-1.5 shadow-sm"
           >
-            Compare Optimizations →
+            Compare in Lab →
           </button>
         </div>
       </div>
@@ -71,6 +87,93 @@ export default function DatasetProfileView({
             </span>
           </div>
           <p className="text-2xl font-bold font-mono text-amber-400 mt-1">~{heapMb} MB</p>
+        </div>
+      </div>
+
+      {/* Ranked Optimization Candidates (Recommendation Engine) */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xs font-mono uppercase tracking-wider text-slate-400">
+            Engine Recommendations ({recommendations.length} Candidates Evaluated)
+          </h3>
+          <span className="text-[11px] font-mono text-cyan-400">
+            Ranked by priority fit & trade-off penalties
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {recommendations.map((rec, index) => (
+            <div
+              key={rec.id}
+              className={`p-4 rounded-lg border flex flex-col justify-between space-y-3 transition-all ${
+                rec.isTopPick
+                  ? 'border-cyan-500/70 bg-gradient-to-b from-cyan-950/30 to-slate-950 shadow-md ring-1 ring-cyan-500/30'
+                  : 'border-slate-800 bg-[var(--color-surface)]'
+              }`}
+            >
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`text-xs font-mono font-bold px-2 py-0.5 rounded uppercase ${
+                        rec.isTopPick
+                          ? 'bg-cyan-500 text-slate-950 font-bold'
+                          : 'bg-slate-800 text-slate-300'
+                      }`}
+                    >
+                      #{index + 1} {rec.isTopPick ? 'Top Pick' : 'Alternative'}
+                    </span>
+                    <span className="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-slate-900 text-slate-400 border border-slate-800">
+                      {rec.category}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 font-mono text-xs">
+                    <span className="text-slate-400">Fit:</span>
+                    <strong className="text-cyan-400">{rec.score}/100</strong>
+                  </div>
+                </div>
+
+                <h4 className="font-semibold text-base text-slate-100">{rec.technique}</h4>
+                <p className="text-xs text-slate-300 leading-relaxed">{rec.fitRationale}</p>
+
+                {/* Benefits */}
+                <div className="pt-2 border-t border-slate-800/80 space-y-1">
+                  <span className="text-[11px] font-mono text-emerald-400 font-medium">
+                    Key Advantages:
+                  </span>
+                  <ul className="text-xs text-slate-300 space-y-0.5 pl-3 list-disc">
+                    {rec.benefits.slice(0, 2).map((b, i) => (
+                      <li key={i}>{b}</li>
+                    ))}
+                  </ul>
+                </div>
+
+                {/* Trade-offs */}
+                <div className="pt-2 border-t border-slate-800/80 space-y-1">
+                  <span className="text-[11px] font-mono text-amber-400 font-medium">
+                    Trade-offs to Validate:
+                  </span>
+                  <ul className="text-xs text-slate-400 space-y-0.5 pl-3 list-disc">
+                    {rec.tradeoffs.slice(0, 2).map((t, i) => (
+                      <li key={i}>{t}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-xs font-mono text-slate-400">
+                <span>
+                  Confidence:{' '}
+                  <strong
+                    className={rec.confidence === 'high' ? 'text-emerald-400' : 'text-amber-400'}
+                  >
+                    {rec.confidence.toUpperCase()}
+                  </strong>
+                </span>
+                <span>Complexity: {rec.complexity}</span>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 

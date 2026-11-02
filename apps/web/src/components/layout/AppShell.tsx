@@ -148,6 +148,7 @@ export default function AppShell() {
           ) : activeStep === 'profile' ? (
             <DatasetProfileView
               dataset={dataset}
+              config={config}
               onProceedToCompare={() => setActiveStep('compare')}
               onChangeDataset={handleReset}
             />

@@ -109,6 +109,21 @@ export interface ChecklistItem {
   category: 'correctness' | 'accessibility' | 'performance';
 }
 
+export interface RecommendationCard {
+  id: string;
+  technique: string;
+  category: 'rendering' | 'compute' | 'storage' | 'network';
+  fitRationale: string;
+  evidence: string;
+  score: number; // 0 - 100
+  confidence: 'high' | 'medium' | 'low';
+  benefits: string[];
+  tradeoffs: string[];
+  prerequisites: string[];
+  complexity: 'low' | 'medium' | 'high';
+  isTopPick: boolean;
+}
+
 export interface ExperimentReport {
   id: string;
   timestamp: string;
