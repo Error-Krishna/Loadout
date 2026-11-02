@@ -1,12 +1,18 @@
 import { useState } from 'react';
 import type { WorkbenchView, AnalysisStep } from '../../types/navigation';
 import type { LoadedDataset, AnalysisConfiguration } from '../../types/dataset';
+import { generateSyntheticDataset, SYNTHETIC_PRESETS } from '../../lib/dataset/synthetic';
 import DatasetIntake from '../intake/DatasetIntake';
 import AnalysisConfigView from '../configure/AnalysisConfigView';
 import DatasetProfileView from '../profile/DatasetProfileView';
 import DatasetCompareLab from '../compare/DatasetCompareLab';
 import DatasetImplementationGuide from '../implement/DatasetImplementationGuide';
 import DatasetReportView from '../report/DatasetReportView';
+import OverviewView from '../overview/OverviewView';
+import WorkloadsView from '../workloads/WorkloadsView';
+import TechniqueLibraryView from '../library/TechniqueLibraryView';
+import ReportsManagerView from '../report/ReportsManagerView';
+import SettingsView from '../settings/SettingsView';
 
 const STEPS: { id: AnalysisStep; label: string; number: string }[] = [
   { id: 'input', label: 'Input', number: '01' },
@@ -18,6 +24,7 @@ const STEPS: { id: AnalysisStep; label: string; number: string }[] = [
 ];
 
 const NAV_ITEMS: { id: WorkbenchView; label: string }[] = [
+  { id: 'overview', label: 'Overview' },
   { id: 'new-analysis', label: 'New Analysis' },
   { id: 'workloads', label: 'Workloads' },
   { id: 'performance-lab', label: 'Performance Lab' },
@@ -41,7 +48,16 @@ export default function AppShell() {
 
   function handleDatasetLoaded(loaded: LoadedDataset) {
     setDataset(loaded);
+    setActiveView('new-analysis');
     setActiveStep('configure');
+  }
+
+  function handleLoad25k() {
+    const preset = SYNTHETIC_PRESETS[1] || SYNTHETIC_PRESETS[0]!;
+    const synthetic = generateSyntheticDataset(preset);
+    setDataset(synthetic);
+    setActiveView('new-analysis');
+    setActiveStep('profile');
   }
 
   function handleReset() {
@@ -50,21 +66,28 @@ export default function AppShell() {
     setActiveStep('input');
   }
 
+  // Active dataset for direct Performance Lab mode (fallback to 10k preset if none loaded)
+  const labDataset = dataset ?? generateSyntheticDataset(SYNTHETIC_PRESETS[0]!);
+
   return (
     <div className="flex flex-col min-h-screen bg-[var(--color-canvas)] text-slate-100 font-sans">
       {/* 1. Header Bar */}
-      <header className="h-14 border-b border-slate-800 bg-[var(--color-surface)] px-6 flex items-center justify-between">
+      <header className="h-14 border-b border-slate-800 bg-[var(--color-surface)] px-6 flex items-center justify-between sticky top-0 z-50">
         <div className="flex items-center gap-6">
-          <div className="flex items-baseline gap-2">
+          <button
+            type="button"
+            onClick={() => setActiveView('overview')}
+            className="flex items-baseline gap-2 text-left cursor-pointer focus:outline-none"
+          >
             <span className="text-lg font-bold tracking-wider text-cyan-400 font-mono">
               LOADOUT
             </span>
             <span className="text-xs text-slate-400 font-mono hidden sm:inline">
               v1.0 • Workbench
             </span>
-          </div>
+          </button>
 
-          <nav className="flex items-center gap-1" aria-label="Main Navigation">
+          <nav className="flex items-center gap-1 overflow-x-auto" aria-label="Main Navigation">
             {NAV_ITEMS.map((item) => {
               const isActive = activeView === item.id;
               return (
@@ -72,7 +95,7 @@ export default function AppShell() {
                   key={item.id}
                   type="button"
                   onClick={() => setActiveView(item.id)}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
                     isActive
                       ? 'bg-slate-800 text-cyan-400 font-semibold'
                       : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
@@ -86,7 +109,7 @@ export default function AppShell() {
         </div>
 
         {/* Local Processing Privacy Badge */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-mono bg-emerald-950/60 text-emerald-400 border border-emerald-800/50">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
             Local-First Engine
@@ -134,47 +157,66 @@ export default function AppShell() {
 
       {/* 3. Main Workspace Area */}
       <main className="flex-1 p-6 max-w-7xl w-full mx-auto">
-        {activeView === 'new-analysis' ? (
-          activeStep === 'input' || !dataset ? (
-            <DatasetIntake onDatasetLoaded={handleDatasetLoaded} />
-          ) : activeStep === 'configure' ? (
-            <AnalysisConfigView
-              dataset={dataset}
-              config={config}
-              onChangeConfig={setConfig}
-              onProceedToProfile={() => setActiveStep('profile')}
-              onBackToInput={handleReset}
-            />
-          ) : activeStep === 'profile' ? (
-            <DatasetProfileView
-              dataset={dataset}
-              config={config}
-              onProceedToCompare={() => setActiveStep('compare')}
-              onChangeDataset={handleReset}
-            />
-          ) : activeStep === 'compare' ? (
-            <DatasetCompareLab
-              dataset={dataset}
-              onProceedToImplement={() => setActiveStep('implement')}
-              onBackToProfile={() => setActiveStep('profile')}
-            />
-          ) : activeStep === 'implement' ? (
-            <DatasetImplementationGuide
-              dataset={dataset}
-              onProceedToReport={() => setActiveStep('report')}
-              onBackToCompare={() => setActiveStep('compare')}
-            />
-          ) : (
-            <DatasetReportView
-              dataset={dataset}
-              onRestart={handleReset}
-              onBackToImplement={() => setActiveStep('implement')}
-            />
-          )
+        {activeView === 'overview' ? (
+          <OverviewView
+            onNavigate={(view) => setActiveView(view)}
+            onStartSyntheticAnalysis={handleLoad25k}
+          />
+        ) : activeView === 'workloads' ? (
+          <WorkloadsView onDatasetLoaded={handleDatasetLoaded} />
+        ) : activeView === 'performance-lab' ? (
+          <DatasetCompareLab
+            dataset={labDataset}
+            onProceedToImplement={() => {
+              setActiveView('new-analysis');
+              setActiveStep('implement');
+            }}
+            onBackToProfile={() => {
+              setActiveView('new-analysis');
+              setActiveStep('profile');
+            }}
+          />
+        ) : activeView === 'reports' ? (
+          <ReportsManagerView />
+        ) : activeView === 'technique-library' ? (
+          <TechniqueLibraryView />
+        ) : activeView === 'settings' ? (
+          <SettingsView />
+        ) : activeStep === 'input' || !dataset ? (
+          <DatasetIntake onDatasetLoaded={handleDatasetLoaded} />
+        ) : activeStep === 'configure' ? (
+          <AnalysisConfigView
+            dataset={dataset}
+            config={config}
+            onChangeConfig={setConfig}
+            onProceedToProfile={() => setActiveStep('profile')}
+            onBackToInput={handleReset}
+          />
+        ) : activeStep === 'profile' ? (
+          <DatasetProfileView
+            dataset={dataset}
+            config={config}
+            onProceedToCompare={() => setActiveStep('compare')}
+            onChangeDataset={handleReset}
+          />
+        ) : activeStep === 'compare' ? (
+          <DatasetCompareLab
+            dataset={dataset}
+            onProceedToImplement={() => setActiveStep('implement')}
+            onBackToProfile={() => setActiveStep('profile')}
+          />
+        ) : activeStep === 'implement' ? (
+          <DatasetImplementationGuide
+            dataset={dataset}
+            onProceedToReport={() => setActiveStep('report')}
+            onBackToCompare={() => setActiveStep('compare')}
+          />
         ) : (
-          <div className="border border-slate-800 bg-[var(--color-surface)] rounded-lg p-8 text-center text-slate-400">
-            View: <span className="font-mono text-cyan-400">{activeView}</span> (Under development)
-          </div>
+          <DatasetReportView
+            dataset={dataset}
+            onRestart={handleReset}
+            onBackToImplement={() => setActiveStep('implement')}
+          />
         )}
       </main>
 
@@ -189,7 +231,7 @@ export default function AppShell() {
           </span>
         </div>
         <div>
-          <span>Zero network transmission • In-memory only</span>
+          <span>Zero network transmission • In-memory client sandbox</span>
         </div>
       </footer>
     </div>
