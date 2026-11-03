@@ -1,20 +1,30 @@
 import { useMemo, useState, useRef, useEffect } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { LoadedDataset, TableMode } from '../../types/dataset';
+import type { BenchmarkComparisonRecord } from '../../types/benchmark';
 import { parseDatasetRows } from '../../lib/dataset/parser';
 import { useDatasetFilter } from '../../hooks/useDatasetFilter';
 import { useProgressiveChunking } from '../../hooks/useProgressiveChunking';
+import {
+  runDatasetComparisonSuite,
+  type DatasetBenchmarkType,
+} from '../../lib/benchmark/workloads/dataset-benchmark-suite';
+import type { BenchmarkProgress } from '../../lib/benchmark/runner';
 
 interface DatasetCompareLabProps {
   dataset: LoadedDataset;
   onProceedToImplement: () => void;
   onBackToProfile: () => void;
+  onBenchmarkCompleted?: (record: BenchmarkComparisonRecord) => void;
+  activeBenchmarkRecord?: BenchmarkComparisonRecord | null;
 }
 
 export default function DatasetCompareLab({
   dataset,
   onProceedToImplement,
   onBackToProfile,
+  onBenchmarkCompleted,
+  activeBenchmarkRecord,
 }: DatasetCompareLabProps) {
   const [mode, setMode] = useState<TableMode>('virtualized');
   const [baselineCap, setBaselineCap] = useState<number>(1000);
@@ -24,6 +34,18 @@ export default function DatasetCompareLab({
   // Search & Filtering States
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [useWorkerFilter, setUseWorkerFilter] = useState<boolean>(true);
+
+  // Automated Benchmark Engine State (M1-T04 & M1-T06)
+  const [benchmarkType, setBenchmarkType] = useState<DatasetBenchmarkType>('table-render');
+  const [isBenchmarking, setIsBenchmarking] = useState<boolean>(false);
+  const [benchmarkProgress, setBenchmarkProgress] = useState<
+    (BenchmarkProgress & { activeVariant: 'baseline' | 'candidate' }) | null
+  >(null);
+  const [benchmarkRecord, setBenchmarkRecord] = useState<BenchmarkComparisonRecord | null>(
+    activeBenchmarkRecord ?? null,
+  );
+  const [benchmarkError, setBenchmarkError] = useState<string | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // 1. Parse initial rows based on active mode cap
   const { columns, rawRows, totalRows } = useMemo(() => {
@@ -36,12 +58,13 @@ export default function DatasetCompareLab({
     };
   }, [dataset, mode, baselineCap]);
 
-  // 2. Filter rows using Web Worker or Main Thread
+  // 2. Filter rows using Web Worker or Main Thread (M1-T05)
   const { filteredRows, telemetry: filterTelemetry } = useDatasetFilter({
     rows: rawRows,
     columns,
     query: searchQuery,
     useWorker: useWorkerFilter,
+    datasetId: dataset.name,
   });
 
   // 3. Progressive chunking hook for time-sliced mounting
@@ -83,6 +106,48 @@ export default function DatasetCompareLab({
     return () => cancelAnimationFrame(rafId);
   }, [mode, baselineCap, dataset, filteredRows.length]);
 
+  // Run Real Benchmark Functionality (M1-T04)
+  async function handleRunBenchmark() {
+    setIsBenchmarking(true);
+    setBenchmarkError(null);
+    setBenchmarkProgress(null);
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    try {
+      const record = await runDatasetComparisonSuite({
+        datasetName: dataset.name,
+        rows: rawRows,
+        columns,
+        benchmarkType,
+        searchQuery: searchQuery || 'test',
+        signal: controller.signal,
+        onProgress: (p) => {
+          setBenchmarkProgress(p);
+        },
+      });
+
+      setBenchmarkRecord(record);
+      onBenchmarkCompleted?.(record);
+    } catch (err) {
+      if (controller.signal.aborted) {
+        setBenchmarkError('Benchmark was cancelled by user.');
+      } else {
+        setBenchmarkError((err as Error).message || 'Benchmark execution failed.');
+      }
+    } finally {
+      setIsBenchmarking(false);
+      abortControllerRef.current = null;
+    }
+  }
+
+  function handleCancelBenchmark() {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort('Benchmark cancelled by user.');
+    }
+  }
+
   return (
     <div className="w-full max-w-7xl mx-auto space-y-6">
       {/* Top Bar Navigation */}
@@ -112,6 +177,260 @@ export default function DatasetCompareLab({
             View Implementation Guide →
           </button>
         </div>
+      </div>
+
+      {/* ==================================================================== */}
+      {/* REAL BENCHMARK SUITE RUNNER PANEL (Milestone 1, M1-T04 & M1-T06)      */}
+      {/* ==================================================================== */}
+      <div className="p-5 rounded-lg border border-cyan-800/60 bg-slate-950 shadow-md space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+              <h3 className="text-sm font-bold font-mono text-slate-100 uppercase tracking-wider">
+                Automated Benchmark & Correctness Verification Suite
+              </h3>
+            </div>
+            <p className="text-xs text-slate-400 mt-1">
+              Executes controlled trials (2 warmups, 5 measured), verifies semantic correctness,
+              measures execution timing boundaries, and calculates comparison uncertainty.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3 shrink-0">
+            <select
+              value={benchmarkType}
+              disabled={isBenchmarking}
+              onChange={(e) => setBenchmarkType(e.target.value as DatasetBenchmarkType)}
+              className="px-3 py-1.5 text-xs font-mono rounded bg-slate-900 border border-slate-700 text-slate-200 focus:outline-none focus:border-cyan-400"
+              aria-label="Benchmark comparison type"
+            >
+              <option value="table-render">Table Render: Full Naive vs Virtualized</option>
+              <option value="search-filter">Search Filter: Sync Scan vs Tokenized</option>
+            </select>
+
+            {isBenchmarking ? (
+              <button
+                type="button"
+                onClick={handleCancelBenchmark}
+                className="px-4 py-1.5 text-xs font-mono font-bold rounded bg-rose-600 hover:bg-rose-500 text-white transition-colors"
+              >
+                ✕ Cancel Benchmark
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleRunBenchmark}
+                className="px-4 py-1.5 text-xs font-mono font-bold rounded bg-cyan-500 hover:bg-cyan-400 text-slate-950 transition-colors shadow"
+              >
+                ▶ Run Benchmark Suite
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Live Execution Progress Bar */}
+        {isBenchmarking && benchmarkProgress && (
+          <div className="p-4 rounded-lg bg-slate-900/80 border border-cyan-700/50 space-y-2">
+            <div className="flex items-center justify-between text-xs font-mono">
+              <div className="flex items-center gap-2">
+                <span className="uppercase text-cyan-400 font-bold">
+                  [{benchmarkProgress.activeVariant}] Phase: {benchmarkProgress.phase}
+                </span>
+                <span className="text-slate-400">
+                  • Iteration {benchmarkProgress.currentIteration} (
+                  {benchmarkProgress.isWarmup ? 'Warmup' : 'Measured'})
+                </span>
+              </div>
+              <span className="text-slate-200 font-bold">{benchmarkProgress.percent}%</span>
+            </div>
+            <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
+              <div
+                className="bg-cyan-400 h-full transition-all duration-150"
+                style={{ width: `${benchmarkProgress.percent}%` }}
+              />
+            </div>
+            {benchmarkProgress.message && (
+              <p className="text-[11px] text-slate-400 font-mono italic">
+                {benchmarkProgress.message}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Error / Cancellation Alert */}
+        {benchmarkError && (
+          <div className="p-3 rounded-lg bg-rose-950/40 border border-rose-800/60 text-xs font-mono text-rose-300">
+            ⚠️ {benchmarkError}
+          </div>
+        )}
+
+        {/* Completed Benchmark Results & Provenance Display */}
+        {benchmarkRecord && !isBenchmarking && (
+          <div className="space-y-4 pt-1">
+            {/* Verdict Banner */}
+            <div
+              className={`p-4 rounded-lg border flex flex-col md:flex-row md:items-center justify-between gap-3 ${
+                benchmarkRecord.verdict === 'improved'
+                  ? 'bg-emerald-950/40 border-emerald-800/60'
+                  : benchmarkRecord.verdict === 'invalid'
+                    ? 'bg-rose-950/40 border-rose-800/60'
+                    : 'bg-amber-950/40 border-amber-800/60'
+              }`}
+            >
+              <div>
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`px-2 py-0.5 text-xs font-mono font-bold rounded uppercase ${
+                      benchmarkRecord.verdict === 'improved'
+                        ? 'bg-emerald-800 text-emerald-100'
+                        : benchmarkRecord.verdict === 'invalid'
+                          ? 'bg-rose-800 text-rose-100'
+                          : 'bg-amber-800 text-amber-100'
+                    }`}
+                  >
+                    Verdict: {benchmarkRecord.verdict}
+                  </span>
+                  <span className="text-xs font-mono text-slate-300">
+                    {benchmarkRecord.verdictReason}
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-4 text-xs font-mono mt-2 text-slate-300">
+                  <span>
+                    Execution Shift:{' '}
+                    <strong
+                      className={
+                        benchmarkRecord.delta.medianDurationMs < 0
+                          ? 'text-emerald-400 font-bold'
+                          : 'text-amber-400 font-bold'
+                      }
+                    >
+                      {benchmarkRecord.delta.medianDurationMs > 0 ? '+' : ''}
+                      {benchmarkRecord.delta.medianDurationMs} ms (
+                      {benchmarkRecord.delta.medianDurationChangePct > 0 ? '+' : ''}
+                      {benchmarkRecord.delta.medianDurationChangePct}%)
+                    </strong>
+                  </span>
+                  <span>
+                    DOM Nodes Shift:{' '}
+                    <strong className="text-cyan-400 font-bold">
+                      {benchmarkRecord.delta.domNodesDelta.toLocaleString()} (
+                      {benchmarkRecord.delta.domNodesChangePct}%)
+                    </strong>
+                  </span>
+                </div>
+              </div>
+
+              {/* Correctness Pill */}
+              <div className="flex items-center gap-2 shrink-0">
+                <span
+                  className={`px-3 py-1 text-xs font-mono rounded font-bold border ${
+                    benchmarkRecord.correctness.status === 'passed'
+                      ? 'bg-emerald-900/60 text-emerald-300 border-emerald-700'
+                      : 'bg-rose-900/60 text-rose-300 border-rose-700'
+                  }`}
+                >
+                  Correctness: {benchmarkRecord.correctness.status.toUpperCase()}
+                </span>
+              </div>
+            </div>
+
+            {/* Granular Metric Breakdown Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Baseline Variant Summary */}
+              <div className="p-3.5 rounded-lg border border-slate-800 bg-slate-900/40 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-mono font-bold text-rose-400 uppercase">
+                    {benchmarkRecord.baseline.variantLabel}
+                  </span>
+                  <span className="text-[10px] font-mono text-slate-500">
+                    {benchmarkRecord.baseline.distribution.sampleCount} trials
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-xs font-mono pt-1">
+                  <div>
+                    <span className="text-slate-500 block text-[10px]">Median</span>
+                    <span className="text-slate-100 font-bold">
+                      {benchmarkRecord.baseline.distribution.medianMs} ms
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block text-[10px]">Spread</span>
+                    <span className="text-slate-100 font-bold">
+                      {benchmarkRecord.baseline.distribution.spreadMs} ms
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block text-[10px]">Mounted Nodes</span>
+                    <span className="text-slate-100 font-bold">
+                      {benchmarkRecord.baseline.domNodeCount.value.toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Candidate Variant Summary */}
+              <div className="p-3.5 rounded-lg border border-slate-800 bg-slate-900/40 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-mono font-bold text-cyan-400 uppercase">
+                    {benchmarkRecord.candidate.variantLabel}
+                  </span>
+                  <span className="text-[10px] font-mono text-slate-500">
+                    {benchmarkRecord.candidate.distribution.sampleCount} trials
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-xs font-mono pt-1">
+                  <div>
+                    <span className="text-slate-500 block text-[10px]">Median</span>
+                    <span className="text-slate-100 font-bold">
+                      {benchmarkRecord.candidate.distribution.medianMs} ms
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block text-[10px]">Spread</span>
+                    <span className="text-slate-100 font-bold">
+                      {benchmarkRecord.candidate.distribution.spreadMs} ms
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block text-[10px]">Mounted Nodes</span>
+                    <span className="text-slate-100 font-bold">
+                      {benchmarkRecord.candidate.domNodeCount.value.toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Correctness & Provenance Audit Details */}
+            <div className="p-3 rounded-lg border border-slate-800 bg-slate-900/30 text-xs font-mono flex flex-wrap items-center justify-between gap-3 text-slate-400">
+              <div className="flex items-center gap-3">
+                <span>
+                  Record Parity:{' '}
+                  <strong className="text-slate-200">
+                    {benchmarkRecord.correctness.recordCountParity ? '✓ Match' : '✗ Divergent'}
+                  </strong>
+                </span>
+                <span>
+                  Schema Parity:{' '}
+                  <strong className="text-slate-200">
+                    {benchmarkRecord.correctness.schemaParity ? '✓ Match' : '✗ Divergent'}
+                  </strong>
+                </span>
+                <span>
+                  Null Semantics:{' '}
+                  <strong className="text-slate-200">
+                    {benchmarkRecord.correctness.nullSemanticsPreserved ? '✓ Intact' : '✗ Violated'}
+                  </strong>
+                </span>
+              </div>
+              <div className="text-[11px] text-slate-500">
+                Environment: {benchmarkRecord.environment.browserEngine} • Engine Timestamp:{' '}
+                {new Date(benchmarkRecord.environment.capturedAt).toLocaleTimeString()}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Real-Time Interactive Search Bar */}
@@ -194,6 +513,14 @@ export default function DatasetCompareLab({
                 {filterTelemetry.isWorker ? '(0ms UI Lock)' : '(UI Frozen)'}
               </strong>
             </span>
+            {filterTelemetry.dispatchDurationMs !== undefined && (
+              <span>
+                Dispatch Time:{' '}
+                <strong className="text-slate-300 font-normal">
+                  {filterTelemetry.dispatchDurationMs} ms
+                </strong>
+              </span>
+            )}
           </div>
         )}
       </div>

@@ -10,8 +10,8 @@ export const INITIAL_REPORTS: ExperimentReport[] = [
     rowCount: 25000,
     columnCount: 8,
     environment: {
-      userAgent: 'Chromium Engine / Desktop Architecture',
-      platform: 'Local In-Memory Sandbox',
+      userAgent: 'Chromium / Desktop V8 Monotonic Benchmark Clock',
+      platform: 'Local Browser Benchmark Environment',
       date: '2026-11-01',
     },
     baselineMetrics: {
@@ -29,9 +29,10 @@ export const INITIAL_REPORTS: ExperimentReport[] = [
       timeReduction: 97.2,
     },
     verifiedTradeoffs: [
-      'Native browser Ctrl+F search requires in-app search query input.',
+      'Native browser Ctrl+F search requires in-app search query input with row windowing.',
       'Dynamic row heights require measureElement ref callbacks.',
       'Keyboard focus preservation must be tracked across unmounted rows.',
+      'Verified with 5 measured iterations and 2 warmup cycles.',
     ],
   },
   {
@@ -42,8 +43,8 @@ export const INITIAL_REPORTS: ExperimentReport[] = [
     rowCount: 50000,
     columnCount: 12,
     environment: {
-      userAgent: 'Chromium Engine / Desktop Architecture',
-      platform: 'Local In-Memory Sandbox',
+      userAgent: 'Chromium / Desktop V8 Monotonic Benchmark Clock',
+      platform: 'Local Browser Benchmark Environment',
       date: '2026-10-30',
     },
     baselineMetrics: {
@@ -62,14 +63,24 @@ export const INITIAL_REPORTS: ExperimentReport[] = [
     },
     verifiedTradeoffs: [
       'Offloads multi-column search to background worker with 0ms UI lock time.',
+      'Worker initialized with dataset data once to eliminate repeated cloning overhead (M1-T05).',
       'Audit log requires sequence ID ordering to prevent stale result overwriting.',
     ],
   },
 ];
 
-export default function ReportsManagerView() {
-  const [reports] = useState<ExperimentReport[]>(INITIAL_REPORTS);
-  const [selectedReport, setSelectedReport] = useState<ExperimentReport>(INITIAL_REPORTS[0]!);
+interface ReportsManagerViewProps {
+  customReports?: ExperimentReport[];
+}
+
+export default function ReportsManagerView({ customReports }: ReportsManagerViewProps) {
+  const [reports] = useState<ExperimentReport[]>(() => {
+    if (customReports && customReports.length > 0) {
+      return [...customReports, ...INITIAL_REPORTS];
+    }
+    return INITIAL_REPORTS;
+  });
+  const [selectedReport, setSelectedReport] = useState<ExperimentReport>(reports[0]!);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   function handleCopyMarkdown(rep: ExperimentReport) {
@@ -81,7 +92,7 @@ export default function ReportsManagerView() {
 | Metric | Baseline (Naive) | Candidate (${rep.candidateMetrics.technique}) | Improvement |
 | :--- | :--- | :--- | :--- |
 | **Mounted DOM Nodes** | ${rep.baselineMetrics.domNodes.toLocaleString()} nodes | ${rep.candidateMetrics.domNodes} nodes | **${rep.improvementPct.domReduction}% reduction** |
-| **Initial Render Time** | ~${rep.baselineMetrics.renderTimeMs} ms | ~${rep.candidateMetrics.renderTimeMs} ms | **${rep.improvementPct.timeReduction}% faster** |
+| **Execution Duration** | ${rep.baselineMetrics.renderTimeMs} ms [measured] | ${rep.candidateMetrics.renderTimeMs} ms [measured] | **${rep.improvementPct.timeReduction}% faster** |
 | **Scaling Complexity** | O(N) Linear | O(1) Constant | Scalable |
 
 ### ⚠️ Verified Trade-Offs & Gotchas
@@ -95,7 +106,8 @@ ${rep.verifiedTradeoffs.map((t) => `- ${t}`).join('\n')}
   }
 
   function handleDownloadJson(rep: ExperimentReport) {
-    const blob = new Blob([JSON.stringify(rep, null, 2)], { type: 'application/json' });
+    const payload = rep.benchmarkComparison ?? rep;
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -114,8 +126,7 @@ ${rep.verifiedTradeoffs.map((t) => `- ${t}`).join('\n')}
           </span>
           <h2 className="text-lg font-bold text-slate-100">Benchmark Dossier History</h2>
           <p className="text-xs text-slate-400 font-mono">
-            Review, inspect, and export evidence-backed audit reports from your past analysis
-            sessions.
+            Review, inspect, and export evidence-backed audit reports from your benchmark sessions.
           </p>
         </div>
       </div>
@@ -214,13 +225,13 @@ ${rep.verifiedTradeoffs.map((t) => `- ${t}`).join('\n')}
                 </tr>
                 <tr>
                   <td className="px-4 py-2.5 text-slate-300 font-semibold">
-                    Initial Render Latency
+                    Execution Duration (Median)
                   </td>
                   <td className="px-4 py-2.5 text-amber-400">
-                    ~{selectedReport.baselineMetrics.renderTimeMs} ms
+                    {selectedReport.baselineMetrics.renderTimeMs} ms
                   </td>
                   <td className="px-4 py-2.5 text-cyan-400">
-                    ~{selectedReport.candidateMetrics.renderTimeMs} ms
+                    {selectedReport.candidateMetrics.renderTimeMs} ms
                   </td>
                   <td className="px-4 py-2.5 text-cyan-300 font-bold">
                     {selectedReport.improvementPct.timeReduction}% faster
@@ -228,7 +239,7 @@ ${rep.verifiedTradeoffs.map((t) => `- ${t}`).join('\n')}
                 </tr>
                 <tr>
                   <td className="px-4 py-2.5 text-slate-300 font-semibold">
-                    Heap Memory Footprint
+                    Estimated Memory Footprint
                   </td>
                   <td className="px-4 py-2.5 text-slate-300">
                     ~{selectedReport.baselineMetrics.memoryEstimateMb} MB

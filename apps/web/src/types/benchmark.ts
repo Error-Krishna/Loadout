@@ -11,12 +11,7 @@ import { z } from 'zod';
  * - unsupported: Capability is not implemented by the platform or product (e.g., direct GPU memory access).
  */
 export type MetricProvenance =
-  | 'measured'
-  | 'estimated'
-  | 'simulated'
-  | 'inferred'
-  | 'unavailable'
-  | 'unsupported';
+  'measured' | 'estimated' | 'simulated' | 'inferred' | 'unavailable' | 'unsupported';
 
 export const METRIC_PROVENANCES: readonly MetricProvenance[] = [
   'measured',
@@ -242,11 +237,7 @@ export const DEFAULT_BENCHMARK_POLICY: BenchmarkPolicy = {
  * Distinguishes genuine improvements from noise and invalid runs (Sec. 10.4).
  */
 export type ComparisonVerdict =
-  | 'improved'
-  | 'regressed'
-  | 'no-difference'
-  | 'inconclusive'
-  | 'invalid';
+  'improved' | 'regressed' | 'no-difference' | 'inconclusive' | 'invalid';
 
 export const comparisonVerdictSchema = z.enum([
   'improved',

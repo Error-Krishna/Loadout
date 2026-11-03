@@ -1,7 +1,4 @@
-import {
-  benchmarkEnvironmentSchema,
-  type BenchmarkEnvironment,
-} from '../../types/benchmark';
+import { benchmarkEnvironmentSchema, type BenchmarkEnvironment } from '../../types/benchmark';
 
 /**
  * Detects the underlying browser layout engine from User Agent tokens.

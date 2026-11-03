@@ -1,14 +1,25 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import type { FilterWorkerRequest, FilterWorkerResponse, FilterTelemetry } from '../types/dataset';
+import type {
+  FilterWorkerInboundMessage,
+  FilterWorkerOutboundMessage,
+  FilterTelemetry,
+} from '../types/dataset';
 
 interface UseDatasetFilterParams {
   rows: Record<string, unknown>[];
   columns: string[];
   query: string;
   useWorker: boolean;
+  datasetId?: string;
 }
 
-export function useDatasetFilter({ rows, columns, query, useWorker }: UseDatasetFilterParams) {
+export function useDatasetFilter({
+  rows,
+  columns,
+  query,
+  useWorker,
+  datasetId = 'default-dataset',
+}: UseDatasetFilterParams) {
   const [activeResults, setActiveResults] = useState<{
     rows: Record<string, unknown>[];
     telemetry: FilterTelemetry;
@@ -16,11 +27,14 @@ export function useDatasetFilter({ rows, columns, query, useWorker }: UseDataset
 
   const workerRef = useRef<Worker | null>(null);
   const sequenceIdRef = useRef<number>(0);
+  const isWorkerReadyRef = useRef<boolean>(false);
+  const pendingQueryRef = useRef<string | null>(null);
+  const dispatchDurationRef = useRef<number>(0);
 
   const trimmedQuery = query.trim().toLowerCase();
   const isEmpty = trimmedQuery.length === 0;
 
-  // Initialize Web Worker instance if supported by runtime
+  // Initialize Web Worker instance & cache dataset ONCE
   useEffect(() => {
     if (typeof Worker === 'undefined') {
       return;
@@ -32,34 +46,87 @@ export function useDatasetFilter({ rows, columns, query, useWorker }: UseDataset
       });
 
       workerRef.current = worker;
+      isWorkerReadyRef.current = false;
 
-      worker.onmessage = (e: MessageEvent<FilterWorkerResponse>) => {
-        const { id, filteredIndices, durationMs } = e.data;
-        // Stale-result suppression: Discard if a newer search query was already issued
-        if (id !== sequenceIdRef.current) {
+      worker.onmessage = (e: MessageEvent<FilterWorkerOutboundMessage>) => {
+        const msg = e.data;
+        if (!msg) return;
+
+        // 1. Worker acknowledges dataset initialization
+        if (msg.type === 'ready') {
+          isWorkerReadyRef.current = true;
+          // Dispatch pending query if user typed during init
+          if (pendingQueryRef.current !== null) {
+            const pendingQuery = pendingQueryRef.current;
+            pendingQueryRef.current = null;
+            sequenceIdRef.current += 1;
+            const currentId = sequenceIdRef.current;
+            worker.postMessage({
+              type: 'filter',
+              id: currentId,
+              query: pendingQuery,
+            } satisfies FilterWorkerInboundMessage);
+          }
           return;
         }
 
-        const matchedRows = filteredIndices.map((idx) => rows[idx]!).filter(Boolean);
-        setActiveResults({
-          rows: matchedRows,
-          telemetry: {
-            executionDurationMs: durationMs,
-            mainThreadLockMs: 0, // Worker offloads CPU: 0ms main thread lock!
-            isWorker: true,
-            matchesCount: matchedRows.length,
-          },
-        });
+        // 2. Worker returned filtered indices
+        if (msg.type === 'filtered' || ('filteredIndices' in msg && !msg.type)) {
+          const { id, filteredIndices, durationMs } = msg;
+
+          // Stale-result suppression: discard if a newer query has already been issued
+          if (id !== sequenceIdRef.current) {
+            return;
+          }
+
+          const matchedRows = filteredIndices.map((idx) => rows[idx]!).filter(Boolean);
+          setActiveResults({
+            rows: matchedRows,
+            telemetry: {
+              executionDurationMs: durationMs,
+              mainThreadLockMs: 0, // Worker offloads CPU: 0ms main thread lock!
+              isWorker: true,
+              matchesCount: matchedRows.length,
+              dispatchDurationMs: dispatchDurationRef.current,
+            },
+          });
+          return;
+        }
+
+        // 3. Worker reported error: graceful fallback
+        if (msg.type === 'error') {
+          console.warn('Dataset filter worker error:', msg.message);
+        }
       };
 
+      worker.onerror = (err) => {
+        console.warn('Web Worker runtime error, terminating:', err);
+        isWorkerReadyRef.current = false;
+      };
+
+      // Initialize worker with dataset ONCE (eliminates repeated structured cloning on search)
+      const initMsg: FilterWorkerInboundMessage = {
+        type: 'init',
+        datasetId,
+        rows,
+        columns,
+      };
+      worker.postMessage(initMsg);
+
       return () => {
+        try {
+          worker.postMessage({ type: 'clear' } satisfies FilterWorkerInboundMessage);
+        } catch {
+          // Worker might already be stopped
+        }
         worker.terminate();
         workerRef.current = null;
+        isWorkerReadyRef.current = false;
       };
     } catch {
       // Graceful fallback if worker initialization fails in restricted environment
     }
-  }, [rows]);
+  }, [rows, columns, datasetId]);
 
   // Execute search filtering when query is present
   useEffect(() => {
@@ -68,20 +135,26 @@ export function useDatasetFilter({ rows, columns, query, useWorker }: UseDataset
     }
 
     if (useWorker && workerRef.current) {
-      // 1. Web Worker Execution with Sequence ID
       sequenceIdRef.current += 1;
       const currentId = sequenceIdRef.current;
 
-      const request: FilterWorkerRequest = {
+      if (!isWorkerReadyRef.current) {
+        // Queue until worker fires 'ready'
+        pendingQueryRef.current = trimmedQuery;
+        return;
+      }
+
+      // Send search query WITHOUT copying the rows array
+      const dispatchStart = performance.now();
+      const filterRequest: FilterWorkerInboundMessage = {
+        type: 'filter',
         id: currentId,
         query: trimmedQuery,
-        rows,
-        columns,
       };
-
-      workerRef.current.postMessage(request);
+      workerRef.current.postMessage(filterRequest);
+      dispatchDurationRef.current = Number((performance.now() - dispatchStart).toFixed(2));
     } else {
-      // 2. Main Thread Execution (Blocking UI)
+      // Main Thread Execution (Blocking UI)
       const start = performance.now();
       const matched = rows.filter((row) => {
         for (let i = 0; i < columns.length; i++) {
@@ -98,35 +171,45 @@ export function useDatasetFilter({ rows, columns, query, useWorker }: UseDataset
         }
         return false;
       });
+      const duration = Number((performance.now() - start).toFixed(2));
 
-      const lockDuration = Number((performance.now() - start).toFixed(2));
       setActiveResults({
         rows: matched,
         telemetry: {
-          executionDurationMs: lockDuration,
-          mainThreadLockMs: lockDuration, // Main thread was blocked for this entire duration!
+          executionDurationMs: duration,
+          mainThreadLockMs: duration, // Main thread is synchronously frozen during search
           isWorker: false,
           matchesCount: matched.length,
+          dispatchDurationMs: 0,
         },
       });
     }
-  }, [trimmedQuery, rows, columns, useWorker]);
+  }, [trimmedQuery, useWorker, rows, columns]);
 
-  const defaultTelemetry: FilterTelemetry = useMemo(
-    () => ({
-      executionDurationMs: 0,
-      mainThreadLockMs: 0,
-      isWorker: useWorker,
-      matchesCount: rows.length,
-    }),
-    [useWorker, rows.length],
-  );
+  // When search query is empty, return unfiltered original rows instantaneously
+  return useMemo(() => {
+    if (isEmpty) {
+      return {
+        filteredRows: rows,
+        telemetry: {
+          executionDurationMs: 0,
+          mainThreadLockMs: 0,
+          isWorker: useWorker,
+          matchesCount: rows.length,
+          dispatchDurationMs: 0,
+        },
+      };
+    }
 
-  return useMemo(
-    () => ({
-      filteredRows: isEmpty ? rows : (activeResults?.rows ?? []),
-      telemetry: isEmpty ? defaultTelemetry : (activeResults?.telemetry ?? defaultTelemetry),
-    }),
-    [isEmpty, rows, activeResults, defaultTelemetry],
-  );
+    return {
+      filteredRows: activeResults?.rows ?? [],
+      telemetry: activeResults?.telemetry ?? {
+        executionDurationMs: 0,
+        mainThreadLockMs: 0,
+        isWorker: useWorker,
+        matchesCount: 0,
+        dispatchDurationMs: 0,
+      },
+    };
+  }, [isEmpty, rows, useWorker, activeResults]);
 }

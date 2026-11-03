@@ -62,6 +62,7 @@ export const defaultScheduler: Scheduler = {
  */
 export interface WorkloadAdapter<TContext = unknown, TOutput = unknown> {
   name: string;
+  description?: string;
   setup?: () => Promise<TContext> | TContext;
   execute: (
     context: TContext,
@@ -75,7 +76,7 @@ export interface WorkloadAdapter<TContext = unknown, TOutput = unknown> {
   collectMetrics?: (
     output: TOutput,
     context: TContext,
-  ) => { domNodes?: number; heapBytesUsed?: number };
+  ) => { domNodes?: number; heapBytesUsed?: number; [key: string]: unknown };
 }
 
 /**
@@ -109,12 +110,7 @@ export type BenchmarkProgressCallback = (progress: BenchmarkProgress) => void;
 /**
  * Execution Status of a completed or halted benchmark run.
  */
-export type BenchmarkRunStatus =
-  | 'completed'
-  | 'cancelled'
-  | 'timed-out'
-  | 'failed'
-  | 'partial';
+export type BenchmarkRunStatus = 'completed' | 'cancelled' | 'timed-out' | 'failed' | 'partial';
 
 /**
  * Structured outcome returned by the Benchmark Execution Engine.
@@ -220,7 +216,9 @@ export async function runBenchmark<TContext = unknown, TOutput = unknown>(
     const totalIterations = totalWarmups + totalMeasured;
     const completedTotal = (isWarmup ? currentIteration : totalWarmups) + completedMeasured;
     const percent =
-      totalIterations > 0 ? Math.min(100, Math.round((completedTotal / totalIterations) * 100)) : 100;
+      totalIterations > 0
+        ? Math.min(100, Math.round((completedTotal / totalIterations) * 100))
+        : 100;
 
     onProgress({
       phase,
@@ -418,7 +416,9 @@ export async function runBenchmark<TContext = unknown, TOutput = unknown>(
       allTrials.push(trialRecord);
 
       if (trialError) {
-        warnings.push(`Trial ${trialIteration} (${isWarmup ? 'warmup' : 'measured'}): ${trialError}`);
+        warnings.push(
+          `Trial ${trialIteration} (${isWarmup ? 'warmup' : 'measured'}): ${trialError}`,
+        );
         break; // Stop iteration loop on failure
       }
 

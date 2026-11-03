@@ -31,13 +31,7 @@ import {
 export type CorrectnessComparisonMode = 'exact' | 'canonical' | 'sampled';
 
 export type DivergenceCategory =
-  | 'record-count'
-  | 'schema'
-  | 'type'
-  | 'value'
-  | 'null-semantics'
-  | 'order'
-  | 'missing-property';
+  'record-count' | 'schema' | 'type' | 'value' | 'null-semantics' | 'order' | 'missing-property';
 
 /**
  * Structured details for an individual divergence between baseline and candidate.
@@ -372,7 +366,7 @@ export function hashCanonicalDataset(
  * Minimal Linear Congruential Generator for reproducible pseudo-random numbers.
  */
 function pseudoRandom(seed: number): () => number {
-  let s = (seed >>> 0) || 1;
+  let s = seed >>> 0 || 1;
   return () => {
     // Numerical Recipes LCG parameters
     s = (Math.imul(1664525, s) + 1013904223) >>> 0;
@@ -485,9 +479,7 @@ export function formatValueBrief(val: unknown, maxLength = 80): string {
 
 function formatDivergenceMessage(div: Omit<CorrectnessDivergence, 'message'>): string {
   const location =
-    div.recordIndex !== null
-      ? `record #${div.recordIndex} at '${div.path}'`
-      : `'${div.path}'`;
+    div.recordIndex !== null ? `record #${div.recordIndex} at '${div.path}'` : `'${div.path}'`;
 
   switch (div.category) {
     case 'record-count':
@@ -690,14 +682,7 @@ function compareValues(
       return;
     }
     if (expected.getTime() !== actual.getTime()) {
-      addDivergence(
-        ctx,
-        'value',
-        recordIndex,
-        path,
-        expected.toISOString(),
-        actual.toISOString(),
-      );
+      addDivergence(ctx, 'value', recordIndex, path, expected.toISOString(), actual.toISOString());
     }
     return;
   }

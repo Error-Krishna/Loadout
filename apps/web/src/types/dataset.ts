@@ -60,6 +60,18 @@ export interface RenderBenchmarkMetrics {
   totalRowCount: number;
 }
 
+export type FilterWorkerInboundMessage =
+  | { type: 'init'; datasetId: string; rows: Record<string, unknown>[]; columns: string[] }
+  | { type: 'filter'; id: number; query: string }
+  | { type: 'clear' }
+  | { type?: undefined; id: number; query: string; rows: Record<string, unknown>[]; columns: string[] };
+
+export type FilterWorkerOutboundMessage =
+  | { type: 'ready'; datasetId: string; rowCount: number }
+  | { type: 'filtered'; id: number; filteredIndices: number[]; durationMs: number }
+  | { type: 'error'; id?: number; message: string }
+  | { type?: undefined; id: number; filteredIndices: number[]; durationMs: number };
+
 export interface FilterWorkerRequest {
   id: number;
   query: string;
@@ -78,6 +90,7 @@ export interface FilterTelemetry {
   mainThreadLockMs: number;
   isWorker: boolean;
   matchesCount: number;
+  dispatchDurationMs?: number;
 }
 
 export type TableMode = 'baseline' | 'virtualized' | 'chunked';
@@ -156,4 +169,3 @@ export interface ExperimentReport {
 }
 
 export * from './benchmark';
-

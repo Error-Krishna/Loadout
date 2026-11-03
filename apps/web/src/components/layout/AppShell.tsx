@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { WorkbenchView, AnalysisStep } from '../../types/navigation';
 import type { LoadedDataset, AnalysisConfiguration } from '../../types/dataset';
+import type { BenchmarkComparisonRecord } from '../../types/benchmark';
 import { generateSyntheticDataset, SYNTHETIC_PRESETS } from '../../lib/dataset/synthetic';
 import DatasetIntake from '../intake/DatasetIntake';
 import AnalysisConfigView from '../configure/AnalysisConfigView';
@@ -45,9 +46,11 @@ export default function AppShell() {
   const [activeStep, setActiveStep] = useState<AnalysisStep>('input');
   const [dataset, setDataset] = useState<LoadedDataset | null>(null);
   const [config, setConfig] = useState<AnalysisConfiguration>(DEFAULT_CONFIG);
+  const [comparisonRecord, setComparisonRecord] = useState<BenchmarkComparisonRecord | null>(null);
 
   function handleDatasetLoaded(loaded: LoadedDataset) {
     setDataset(loaded);
+    setComparisonRecord(null);
     setActiveView('new-analysis');
     setActiveStep('configure');
   }
@@ -56,6 +59,7 @@ export default function AppShell() {
     const preset = SYNTHETIC_PRESETS[1] || SYNTHETIC_PRESETS[0]!;
     const synthetic = generateSyntheticDataset(preset);
     setDataset(synthetic);
+    setComparisonRecord(null);
     setActiveView('new-analysis');
     setActiveStep('profile');
   }
@@ -63,6 +67,7 @@ export default function AppShell() {
   function handleReset() {
     setDataset(null);
     setConfig(DEFAULT_CONFIG);
+    setComparisonRecord(null);
     setActiveStep('input');
   }
 
@@ -175,6 +180,8 @@ export default function AppShell() {
               setActiveView('new-analysis');
               setActiveStep('profile');
             }}
+            onBenchmarkCompleted={setComparisonRecord}
+            activeBenchmarkRecord={comparisonRecord}
           />
         ) : activeView === 'reports' ? (
           <ReportsManagerView />
@@ -204,6 +211,8 @@ export default function AppShell() {
             dataset={dataset}
             onProceedToImplement={() => setActiveStep('implement')}
             onBackToProfile={() => setActiveStep('profile')}
+            onBenchmarkCompleted={setComparisonRecord}
+            activeBenchmarkRecord={comparisonRecord}
           />
         ) : activeStep === 'implement' ? (
           <DatasetImplementationGuide
@@ -216,6 +225,7 @@ export default function AppShell() {
             dataset={dataset}
             onRestart={handleReset}
             onBackToImplement={() => setActiveStep('implement')}
+            comparisonRecord={comparisonRecord}
           />
         )}
       </main>
