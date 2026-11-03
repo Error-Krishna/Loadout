@@ -151,4 +151,9 @@ export interface ExperimentReport {
     timeReduction: number;
   };
   verifiedTradeoffs: string[];
+  /** Optional linked canonical benchmark comparison record (Milestone 1) */
+  benchmarkComparison?: import('./benchmark').BenchmarkComparisonRecord;
 }
+
+export * from './benchmark';
+
