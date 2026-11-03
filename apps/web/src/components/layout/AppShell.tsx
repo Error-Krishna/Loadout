@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import type { WorkbenchView, AnalysisStep } from '../../types/navigation';
 import type { LoadedDataset, AnalysisConfiguration } from '../../types/dataset';
 import type { BenchmarkComparisonRecord } from '../../types/benchmark';
@@ -45,25 +46,59 @@ const DEFAULT_CONFIG: AnalysisConfiguration = {
 };
 
 export default function AppShell() {
-  const [activeView, setActiveView] = useState<WorkbenchView>('new-analysis');
-  const [activeStep, setActiveStep] = useState<AnalysisStep>('input');
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // Derive active view and step from URL location (Phase 11)
+  const path = location.pathname.replace(/^\/+/, '');
+  const [viewSegment, stepSegment] = path ? path.split('/') : [];
+
+  const activeView: WorkbenchView =
+    viewSegment && NAV_ITEMS.some((item) => item.id === viewSegment)
+      ? (viewSegment as WorkbenchView)
+      : 'new-analysis';
+
+  const activeStep: AnalysisStep =
+    activeView === 'new-analysis' && stepSegment && STEPS.some((s) => s.id === stepSegment)
+      ? (stepSegment as AnalysisStep)
+      : 'input';
+
+  function setActiveView(view: WorkbenchView) {
+    if (view === 'new-analysis') {
+      navigate(`/new-analysis/${activeStep}`);
+    } else {
+      navigate(`/${view}`);
+    }
+  }
+
+  function setActiveStep(step: AnalysisStep) {
+    navigate(`/new-analysis/${step}`);
+  }
+
   const [dataset, setDataset] = useState<LoadedDataset | null>(null);
   const [config, setConfig] = useState<AnalysisConfiguration>(DEFAULT_CONFIG);
   const [comparisonRecord, setComparisonRecord] = useState<BenchmarkComparisonRecord | null>(null);
   const [isCopilotOpen, setIsCopilotOpen] = useState<boolean>(false);
 
   // Restore session from local IndexedDB on mount (Phase 3)
+  const initialPathRef = useRef(location.pathname);
   useEffect(() => {
     let isMounted = true;
     loadSession()
       .then((saved) => {
         if (!isMounted || !saved) return;
-        setActiveView(saved.activeView);
-        setActiveStep(saved.activeStep);
         if (saved.config) setConfig(saved.config);
         if (saved.activeBenchmarkRecord) setComparisonRecord(saved.activeBenchmarkRecord);
         if (saved.persistedDataset) {
           setDataset(saved.persistedDataset);
+        }
+        // If loaded at root, restore user to their saved view and step
+        if (initialPathRef.current === '/' || initialPathRef.current === '') {
+          if (saved.activeView === 'new-analysis') {
+            navigate(`/new-analysis/${saved.activeStep || 'input'}`, { replace: true });
+          } else if (saved.activeView) {
+            navigate(`/${saved.activeView}`, { replace: true });
+          }
         }
       })
       .catch(() => {});
@@ -71,7 +106,7 @@ export default function AppShell() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [navigate]);
 
   // Autosave session state to local IndexedDB
   useEffect(() => {
