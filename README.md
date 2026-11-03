@@ -1,715 +1,326 @@
-# MERN Starter
+# LOADOUT (v2.0)
 
-A reusable, TypeScript-first MERN monorepo starter for building full-stack web applications. It includes a React frontend, an Express API, MongoDB integration, authentication and authorization foundations, shared development tooling, automated tests, and Docker Compose configuration for local database development.
+> **The engineering engine measures. AI interprets.**
 
-> **Project status:** The starter's configured formatting, lint, TypeScript, test, and production-build checks have passed. The authentication implementation provides registration, login, JWT access tokens, refresh-token rotation, logout, authenticated-user lookup, and role-checking middleware. Passing these checks does not by itself establish production readiness; review the security notes and complete the integration testing described below before deploying.
+LOADOUT is a production-grade, AI-assisted performance engineering workbench designed for frontend developers and systems engineers. It provides empirical measurement, statistical rigor, and controlled experimentation for modern web workloads—including large-scale dataset rendering, client-side image processing pipelines, and high-throughput real-time streaming architectures.
+
+LOADOUT is built on a strict **local-first, privacy-preserving foundation**: user datasets, raw records, and sensitive payloads never leave the browser. While the deterministic measurement engine profiles execution times and enforces semantic correctness gates, the integrated AI Copilot interprets statistical results, explains performance trade-offs, and recommends verified optimization strategies using an embedded knowledge retrieval (RAG) system.
 
 ---
 
-## Table of contents
+## Table of Contents
 
-- [What's included](#whats-included)
-- [Technology stack](#technology-stack)
-- [Prerequisites](#prerequisites)
-- [Quick start](#quick-start)
-- [Environment configuration](#environment-configuration)
-- [Run the application](#run-the-application)
-- [Authentication](#authentication)
-- [Commands reference](#commands-reference)
-- [Testing](#testing)
-- [Production builds](#production-builds)
-- [Project structure](#project-structure)
-- [Using this starter for new projects](#using-this-starter-for-new-projects)
-- [Development workflow](#development-workflow)
-- [MongoDB infrastructure](#mongodb-infrastructure)
-- [Troubleshooting](#troubleshooting)
-- [Before deploying](#before-deploying)
+- [Core Principles](#core-principles)
+- [Architecture & Subsystems](#architecture--subsystems)
+  - [1. Data Ingestion & Stream Parsing](#1-data-ingestion--stream-parsing)
+  - [2. Canonical Benchmark Engine & Provenance](#2-canonical-benchmark-engine--provenance)
+  - [3. Semantic Correctness Verification Gate](#3-semantic-correctness-verification-gate)
+  - [4. Workload Laboratories](#4-workload-laboratories)
+  - [5. Privacy Gateway & AI Copilot](#5-privacy-gateway--ai-copilot)
+  - [6. Local Persistence & State Engine](#6-local-persistence--state-engine)
+- [Monorepo Structure](#monorepo-structure)
+- [Getting Started](#getting-started)
+- [Verification & Quality Commands](#verification--quality-commands)
+- [Technology Stack](#technology-stack)
+- [Privacy & Security Guarantees](#privacy--security-guarantees)
 - [License](#license)
 
 ---
 
-## What's included
+## Core Principles
 
-### Frontend — `apps/web`
+1. **Empirical Measurement Over Intuition**  
+   Optimizations are never declared successful based on one-off runs or speculative micro-benchmarks. LOADOUT runs multi-trial benchmark policies with configurable warmups, inter-run cooldowns, monotonic sub-millisecond clocks (`performance.now()`), and non-parametric hypothesis testing (Mann-Whitney U).
 
-- React 19 and TypeScript
-- Vite 7 for development and production builds
-- React Router for client-side routing
-- TanStack Query for server-state management and caching
-- Axios for HTTP requests
-- React Hook Form and Zod for forms and validation
-- Authentication context, in-memory access-token storage, and a reusable protected-route component
-- Vitest, jsdom, and React Testing Library
-- ESLint and TypeScript checks
+2. **The Correctness Gate Precedes Performance Claims**  
+   A faster algorithm that alters semantics, drops records, corrupts field types, or introduces silent regressions is a broken optimization. Every candidate variant must pass automated correctness gate verification before its performance is recognized.
 
-The frontend contains a basic authentication demonstration. Extend it with your own pages, layouts, components, and product-specific user flows.
+3. **Strict Local-First Privacy (Zero Data Egress)**  
+   User files and raw dataset rows remain exclusively in client memory or browser IndexedDB storage. The AI subsystem operates across a strict Privacy Gateway that sanitizes context into structural metadata and statistical metrics, cryptographically asserting that raw data never touches external network endpoints.
 
-### Backend — `apps/api`
-
-- Node.js with Express 5 and TypeScript using ES modules
-- MongoDB access through Mongoose
-- Zod-based environment and request validation
-- Registration, login, refresh, logout, and current-user endpoints
-- bcrypt password hashing
-- Short-lived JWT access tokens and refresh-token rotation using an HTTP-only cookie
-- Authentication middleware and a role-checking helper
-- CORS, Helmet, rate limiting, and Pino structured logging
-- Vitest and Supertest for API tests
-- ESLint and TypeScript checks
-
-Review [`docs/authentication.md`](docs/authentication.md) for endpoint behavior and security considerations. The authentication tests currently include schema and UI coverage; add database-backed integration tests for the complete lifecycle before relying on it in production.
-
-### Shared tooling
-
-- pnpm workspaces
-- Root-level scripts for development, linting, typechecking, testing, formatting, and builds
-- Prettier and ESLint
-- Husky and lint-staged for Git hooks
-- GitHub Actions workflow files under `.github/`
-
-### Local infrastructure
-
-- Docker Compose configuration at the repository root and in `infra/`
-- MongoDB 8 for local development, with a persistent named volume and health check
-
-**Redis is not defined in the current Compose configuration.** Add it explicitly if an application later requires Redis-backed queues, caching, or other functionality.
+4. **Transparent Metric Provenance**  
+   Every number displayed in LOADOUT carries unambiguous provenance: `real-measurement`, `simulated-estimate`, `deterministic-heuristic`, or `derived-calculation`.
 
 ---
 
-## Technology stack
+## Architecture & Subsystems
 
-| Area                     | Technologies                                     |
-| ------------------------ | ------------------------------------------------ |
-| Monorepo                 | pnpm workspaces                                  |
-| Frontend                 | React 19, TypeScript, Vite 7                     |
-| Routing and server state | React Router, TanStack Query                     |
-| HTTP client              | Axios                                            |
-| Forms and validation     | React Hook Form, Zod                             |
-| Backend                  | Node.js, Express 5, TypeScript                   |
-| Database                 | MongoDB 8, Mongoose                              |
-| Authentication           | bcrypt, JWT access tokens, refresh-token cookies |
-| Middleware and logging   | CORS, Helmet, express-rate-limit, Pino           |
-| Testing                  | Vitest, Supertest, React Testing Library         |
-| Code quality             | ESLint, Prettier                                 |
-| Git hooks                | Husky, lint-staged                               |
-| Local infrastructure     | Docker Compose                                   |
+```
+                                      +---------------------------------------------+
+                                      |            LOADOUT Workbench UI             |
+                                      |  (AppShell, Router, Deep-Linking, Drawer)   |
+                                      +----------------------+----------------------+
+                                                             |
+                 +---------------------------+---------------+---------------------------+
+                 |                           |                                           |
+                 v                           v                                           v
+    +-------------------------+ +-------------------------+               +-------------------------+
+    |   Dataset Laboratory    | |    Image Laboratory     |               |    Stream Laboratory    |
+    | - Streaming RFC4180 CSV | | - AVIF / WebP / JPEG    |               | - 500-10k msgs/sec      |
+    | - NDJSON Stream Parser  | | - Canvas / Offscreen    |               | - Drop-oldest / Drop-new|
+    | - Web Worker Filtering  | | - createImageBitmap     |               | - rAF Visual Throttle   |
+    | - Virtualized DOM Render| | - Blob Lifecycle (Revoke|               | - Transactional Logging |
+    +------------+------------+ +------------+------------+               +------------+------------+
+                 |                           |                                         |
+                 +---------------------------+-----------------------------------------+
+                                             |
+                                             v
+                              +-----------------------------+
+                              | Deterministic Benchmark Engine|
+                              | - Injectable Monotonic Clock|
+                              | - Warmup & Measured Trials  |
+                              | - Cooldown & Execution Guard|
+                              | - Environment Fingerprinting|
+                              +--------------+--------------+
+                                             |
+                 +---------------------------+---------------------------+
+                 |                                                       |
+                 v                                                       v
++---------------------------------+                     +---------------------------------+
+| Semantic Correctness Gate (M1)  |                     | Statistical Aggregation (M1)    |
+| - Record count parity           |                     | - Mean, Median, Min, Max, Spread|
+| - Schema & field parity         |                     | - Sample Variance & Std Dev     |
+| - Type & null value preservation|                     | - P95 & P99 with sample caveats |
+| - djb2 64-bit Hex Hash Samples  |                     | - Mann-Whitney U Hypothesis Test|
+| - Structured divergence reports |                     | - Comparison Uncertainty Verdict|
++---------------------------------+                     +---------------------------------+
+                 |                                                       |
+                 +---------------------------+---------------------------+
+                                             |
+                                             v
+                              +-----------------------------+
+                              |   Local IndexedDB Engine    |
+                              | - Sessions, Benchmarks,     |
+                              |   Reports, User Settings    |
+                              | - In-Memory Fallback Adapter|
+                              +--------------+--------------+
+                                             |
+                                             v
+                              +-----------------------------+
+                              |   AI Privacy Gateway        |
+                              | - Zero-Leakage Sanitization |
+                              | - Strips all raw row data   |
+                              | - Structural context only   |
+                              +--------------+--------------+
+                                             |
+                 +---------------------------+---------------------------+
+                 |                                                       |
+                 v                                                       v
++---------------------------------+                     +---------------------------------+
+| Curated RAG Knowledge Base      |                     | AI Copilot Provider Engine      |
+| - In-Memory BM25/Lexical Search |                     | - Offline Rule-Based Provider   |
+| - Engineering Citations & Links |                     | - BYOK OpenAI Provider          |
+| - Virtualization, GC, Workers   |                     | - BYOK Gemini Provider          |
++---------------------------------+                     +---------------------------------+
+```
+
+### 1. Data Ingestion & Stream Parsing
+- **Streaming RFC 4180 CSV Engine**: Handles multi-line quoted fields, escaped quotes (`""`), and CRLF/LF line endings.
+- **NDJSON Stream Parser**: Fault-tolerant line-by-line parsing that recovers from malformed individual rows without terminating ingestion.
+- **Chunked Processing & Backpressure**: Streams in 64 KB binary chunks with microtask backpressure yielding (`setTimeout(0)`) to preserve UI responsiveness on large files.
+- **Client Resource Limits**: Guarded with a 100 MB hard ceiling and AbortSignal cancellation support.
+- **Synthetic Benchmark Presets**: Includes deterministic generators (`events-10k.csv`, `inventory-50k.csv`, `logs-100k.json`) for stress-testing DOM virtualization and search algorithms immediately without external files.
+
+### 2. Canonical Benchmark Engine & Provenance
+- **Metric Provenance**: Every metric emitted by the engine conforms to canonical Zod schemas, tagged with measurement methodology and unit descriptions.
+- **Execution Runner (`runner.ts`)**: Decoupled from React, executing isolated workload adapters through a deterministic lifecycle:
+  1. Validate benchmark policy and inputs.
+  2. Capture environment metadata (`userAgent`, hardware concurrency, platform, memory heap status).
+  3. Execute setup phase.
+  4. Execute warmup iterations (discarded from final metrics).
+  5. Execute measured iterations with inter-run cooldowns.
+  6. Enforce execution timeouts per trial.
+  7. Execute teardown/cleanup.
+  8. Aggregate trial distributions.
+- **Statistical Rigor (`statistics.ts`)**:
+  - Sample variance and standard deviation using Bessel's correction ($N - 1$).
+  - Percentiles (P95, P99) and quartiles (Q1, Q3, IQR) computed via NIST recommended linear interpolation.
+  - Tukey's fences for IQR-based outlier classification.
+  - Transparent sample reliability warnings: small sample sets (e.g. $N = 5$) explicitly flag tail-latency estimates as preliminary indicators.
+  - Baseline vs. candidate uncertainty evaluation via the Mann-Whitney U rank-sum test with normal approximation, yielding definitive verdicts: `improved`, `regressed`, `inconclusive`, or `no-difference`.
+
+### 3. Semantic Correctness Verification Gate
+- **Validation Modes**:
+  - `exact`: Full record and property equality across the complete dataset.
+  - `canonical`: Structural normalization with key-order independence.
+  - `sampled`: High-speed deterministic sampling for massive datasets, explicitly reporting sample size and coverage confidence.
+- **Verification Checks**:
+  - Record count parity.
+  - Schema and column key parity.
+  - Primitive and composite type consistency.
+  - Null, undefined, and missing key semantics.
+  - Deep value equivalence with configurable floating-point tolerances.
+  - Deterministic 64-bit djb2 hex hashing of dataset states.
+  - Structured divergence reporting detailing exact mismatch indices, expected values, and actual values.
+
+### 4. Workload Laboratories
+- **Dataset Lab**: Comprehensive 6-step workbench pipeline: Intake $\rightarrow$ Schema Profiling $\rightarrow$ Configuration $\rightarrow$ Controlled Benchmark $\rightarrow$ Correctness Gate $\rightarrow$ Actionable Implementation Guide with live code diffs.
+  - Baseline: Naive DOM rendering and main-thread linear search.
+  - Candidate: Virtualized row rendering (`@tanstack/react-virtual`) and non-blocking Web Worker off-thread search.
+- **Image Lab**: Client-side image manipulation and asset optimization laboratory.
+  - Browser format support detection (AVIF, WebP, JPEG).
+  - Main-thread image decoding (`HTMLImageElement.decode()`) vs. asynchronous offscreen bitmap allocation (`createImageBitmap()`).
+  - Strict blob URL lifecycle tracking (`URL.revokeObjectURL`) preventing memory leaks.
+- **Stream Lab**: High-frequency streaming simulation and backpressure laboratory.
+  - Throughput range from 500 to 10,000 messages/second.
+  - Backpressure queue strategies: drop-oldest vs. drop-newest.
+  - Frame-rate coalescing: visual rendering throttled via `requestAnimationFrame` while preserving lossless transactional message logging.
+  - Explicit provenance labeling: `Simulated In-Memory Clock • Zero Network Egress`.
+
+### 5. Privacy Gateway & AI Copilot
+- **Privacy Boundary**: Sits between the workbench state and all AI providers. It strips raw dataset rows, columns, and private values, constructing a sanitized payload containing only structural metadata (row count, column names, data types) and verified benchmark statistics.
+- **Curated RAG Knowledge Base**: High-speed in-memory lexical search engine loaded with verified engineering papers and references:
+  - DOM virtualization and layout thrashing avoidance.
+  - Web Worker concurrency and structured clone overhead.
+  - JavaScript memory management and Garbage Collection pause mitigation.
+  - Real-time backpressure and streaming queue architectures.
+  - Statistical benchmark methodology in V8/browser environments.
+- **Multi-Provider Support**:
+  - `OfflineAIProvider`: Built-in local rule-based heuristic intelligence engine requiring no API keys, interpreting benchmarks, trade-offs, and experiment plans locally.
+  - `OpenAIProvider`: Direct user-configured BYOK integration.
+  - `GeminiProvider`: Direct user-configured BYOK integration.
+- **Interactive UI**: Sliding drawer accessible across the entire application with quick-prompt shortcuts, expandable citation cards, and an inspectable payload view disclosing the exact sanitized data sent to the AI.
+
+### 6. Local Persistence & State Engine
+- **Native IndexedDB Adapter (`db.ts`)**: Promisified, transaction-safe storage engine with zero external dependencies.
+- **Headless & SSR Fallback**: Seamless, transparent in-memory storage fallback for Node.js test runners, headless environments, or private browsing modes.
+- **Object Stores**:
+  - `sessions`: Active workflow state, dataset metadata, and configuration.
+  - `benchmarkResults`: Complete historical benchmark comparison records and correctness results.
+  - `reports`: Saved optimization reports with metrics and findings.
+  - `settings`: User preferences, AI provider selections, and encrypted local API keys.
+- **State Export/Import**: One-click JSON backup bundle generation and restoration.
 
 ---
 
-## Prerequisites
+## Monorepo Structure
 
-Install the following:
-
-1. **Node.js:** `>=22 <25`, as specified in the root `package.json`.
-2. **pnpm:** the project has been verified with pnpm `11.25.0`.
-3. **Git:** for version control.
-4. **Docker Desktop or Docker Engine with Compose:** for running MongoDB locally through Docker.
-
-Check installed versions:
-
-```bash
-node --version
-pnpm --version
-git --version
-docker --version
-docker compose version
 ```
-
-If Corepack is available with your Node.js installation, you can activate the verified pnpm version:
-
-```bash
-corepack enable
-corepack prepare pnpm@11.25.0 --activate
-```
-
----
-
-## Quick start
-
-Run these commands from the repository root.
-
-### 1. Install dependencies
-
-```bash
-pnpm install
-```
-
-### 2. Create local environment files
-
-The API loads environment variables through `dotenv/config`, and the frontend uses Vite's environment-file conventions. Each app's scripts run from its own package directory. Create local files in those app directories:
-
-```bash
-cp .env.example apps/api/.env
-cp apps/web/.env.example apps/web/.env
-```
-
-If either destination already exists, do not overwrite it blindly; review and update it manually.
-
-Generate a unique local JWT secret:
-
-```bash
-JWT_SECRET=$(openssl rand -base64 48 | tr -d '\n')
-sed -i '' "s|^JWT_ACCESS_SECRET=.*|JWT_ACCESS_SECRET=${JWT_SECRET}|" apps/api/.env
-unset JWT_SECRET
-```
-
-The `sed -i ''` syntax above is for macOS. On Linux, use an appropriate Linux `sed` command or edit the file directly. Keep the generated secret private.
-
-The frontend example URL defaults to `http://localhost:5000/api/v1`. If you change the API port, update `VITE_API_URL` in `apps/web/.env` and keep the API's `CORS_ORIGIN` consistent with the frontend origin.
-
-### 3. Start MongoDB
-
-From the repository root:
-
-```bash
-docker compose up -d
-```
-
-Check status and logs:
-
-```bash
-docker compose ps
-docker compose logs -f mongodb
-```
-
-### 4. Start the frontend and API
-
-```bash
-pnpm dev
-```
-
-This starts `@mern/api` and `@mern/web` in parallel. With the example settings, the API listens on port `5000` and Vite normally uses port `5173`. Check terminal output if a port is already occupied or Vite chooses another port.
-
-### 5. Verify the setup
-
-```bash
-pnpm format:check
-pnpm lint
-pnpm typecheck
-pnpm test
-pnpm build
-```
-
-Check that the API responds:
-
-```bash
-curl -i http://localhost:5000/
-```
-
-The API requires a reachable MongoDB instance. If you changed the API port, use that port in the request.
-
----
-
-## Environment configuration
-
-### API — `apps/api/.env`
-
-The root `.env.example` is the template for `apps/api/.env`.
-
-| Variable            | Example                                  | Purpose                                                                            |
-| ------------------- | ---------------------------------------- | ---------------------------------------------------------------------------------- |
-| `NODE_ENV`          | `development`                            | Runtime mode: `development`, `test`, or `production`                               |
-| `API_HOST`          | `0.0.0.0`                                | Host/interface the API binds to                                                    |
-| `API_PORT`          | `5000`                                   | API listening port                                                                 |
-| `MONGODB_URI`       | `mongodb://127.0.0.1:27017/mern_starter` | MongoDB connection string                                                          |
-| `CORS_ORIGIN`       | `http://localhost:5173`                  | Allowed frontend origin                                                            |
-| `LOG_LEVEL`         | `debug`                                  | Pino log level: `fatal`, `error`, `warn`, `info`, `debug`, `trace`, or `silent`    |
-| `JWT_ACCESS_SECRET` | Generate a unique secret                 | Secret used to sign access tokens; never use the example placeholder in production |
-
-The API validates configuration with Zod. Invalid values can prevent the API from starting. For local MongoDB using the supplied Compose configuration, the example URI should work if port `27017` is available.
-
-### Frontend — `apps/web/.env`
-
-```dotenv
-VITE_API_URL=http://localhost:5000/api/v1
-```
-
-`VITE_API_URL` is the base URL used by the frontend API client. Change it to match the API address in each environment.
-
-**Important:** Variables prefixed with `VITE_` are exposed to browser-side code. Never put database credentials, private API keys, or other secrets in them.
-
-### Environment-file rules
-
-- Keep local `.env` files untracked.
-- Commit example files with placeholders or local development values only.
-- Use your hosting provider's secret manager for production credentials.
-- Use separate database names and credentials for development, testing, and production.
-- Review `.gitignore` before adding any new secret-bearing file.
-
----
-
-## Run the application
-
-### Run both apps
-
-```bash
-pnpm dev
-```
-
-### Run only the frontend
-
-```bash
-pnpm --filter @mern/web dev
-```
-
-### Run only the API
-
-```bash
-pnpm --filter @mern/api dev
-```
-
-### Run the compiled API
-
-```bash
-pnpm --filter @mern/api build
-pnpm --filter @mern/api start
-```
-
-Ensure `apps/api/.env` exists and MongoDB is reachable before starting the API.
-
----
-
-## Authentication
-
-The starter includes these API endpoints:
-
-| Method | Endpoint                | Purpose                                             |
-| ------ | ----------------------- | --------------------------------------------------- |
-| `POST` | `/api/v1/auth/register` | Register an account                                 |
-| `POST` | `/api/v1/auth/login`    | Authenticate with credentials                       |
-| `POST` | `/api/v1/auth/refresh`  | Rotate a refresh token and issue a new access token |
-| `POST` | `/api/v1/auth/logout`   | Revoke the refresh session                          |
-| `GET`  | `/api/v1/auth/me`       | Return the authenticated user's profile             |
-
-The frontend includes a simple sign-in/register UI, session restoration, logout, an in-memory access-token store, and a reusable `ProtectedRoute` component.
-
-Security and integration notes:
-
-- Passwords are hashed; they should never be stored in plaintext.
-- Access tokens are short-lived and kept in frontend memory, not local storage.
-- Refresh tokens are delivered in an HTTP-only cookie and stored server-side as hashes.
-- Configure a strong, unique `JWT_ACCESS_SECRET` for each environment.
-- Verify cookie settings, HTTPS, cross-origin behavior, and CSRF protections against your actual deployment topology.
-- Test duplicate registration, invalid credentials, token expiry, refresh-token reuse, logout revocation, and concurrent refresh requests.
-- Add database-backed integration tests using an isolated test database before production deployment.
-
-See [`docs/authentication.md`](docs/authentication.md) for additional implementation details and limitations.
-
----
-
-## Commands reference
-
-Run root commands from the repository root.
-
-| Command                       | Purpose                                                      |
-| ----------------------------- | ------------------------------------------------------------ |
-| `pnpm install`                | Install all workspace dependencies                           |
-| `pnpm dev`                    | Start API and frontend in parallel                           |
-| `pnpm --filter @mern/web dev` | Start only the frontend                                      |
-| `pnpm --filter @mern/api dev` | Start only the API                                           |
-| `pnpm lint`                   | Lint workspace packages                                      |
-| `pnpm typecheck`              | Run TypeScript checks                                        |
-| `pnpm test`                   | Run API and frontend test suites                             |
-| `pnpm test:coverage`          | Run coverage scripts where configured                        |
-| `pnpm build`                  | Build workspace applications                                 |
-| `pnpm start`                  | Start the compiled API                                       |
-| `pnpm format`                 | Format repository files with Prettier                        |
-| `pnpm format:check`           | Check formatting without rewriting files                     |
-| `pnpm clean`                  | Remove generated output where package scripts define cleanup |
-
-Package-specific tests:
-
-```bash
-pnpm --filter @mern/api test
-pnpm --filter @mern/api test:watch
-pnpm --filter @mern/api test:coverage
-
-pnpm --filter @mern/web test
-pnpm --filter @mern/web test:watch
-pnpm --filter @mern/web test:coverage
-```
-
-Inspect current scripts and dependencies:
-
-```bash
-cat package.json
-cat apps/api/package.json
-cat apps/web/package.json
-```
-
----
-
-## Testing
-
-### API tests
-
-```bash
-pnpm --filter @mern/api test
-```
-
-The API uses Vitest and Supertest. Tests can exercise routes and middleware without a manually started HTTP server, depending on how each test is written.
-
-### Frontend tests
-
-```bash
-pnpm --filter @mern/web test
-```
-
-The frontend uses Vitest, jsdom, and React Testing Library.
-
-### All tests
-
-```bash
-pnpm test
-```
-
-Tests that interact with MongoDB or external services need those dependencies and environment variables configured. Prefer isolated, repeatable tests over tests that depend on personal or production data.
-
----
-
-## Production builds
-
-Build both applications:
-
-```bash
-pnpm build
-```
-
-The API compiles TypeScript to its configured output directory. The frontend runs TypeScript project checks and creates optimized assets through Vite.
-
-Preview the built frontend locally:
-
-```bash
-pnpm --filter @mern/web preview
-```
-
-A successful build confirms that the code compiles and frontend assets can be bundled. It does not replace integration testing, a security review, environment configuration, or deployment smoke tests. Vite's preview server is not a production hosting solution.
-
-Deploy the API and frontend according to your chosen hosting platform's requirements.
-
----
-
-## Project structure
-
-```text
-mern-starter/
+.
 ├── apps/
-│   ├── api/
+│   ├── web/                         # Frontend Application (React 19 + Vite 7 + Tailwind 4)
 │   │   ├── src/
-│   │   │   ├── common/middleware/ # Authentication/authorization middleware
-│   │   │   ├── config/            # Validated environment configuration
-│   │   │   └── modules/
-│   │   │       ├── auth/          # Auth routes, schemas, refresh sessions
-│   │   │       └── users/         # User model
-│   │   ├── package.json
-│   │   └── .env                  # Local only; do not commit
-│   └── web/
+│   │   │   ├── auth/                # Authentication context & route guards
+│   │   │   ├── components/
+│   │   │   │   ├── ai/              # AI Copilot drawer & payload inspector
+│   │   │   │   ├── compare/         # Dataset Benchmark comparison view
+│   │   │   │   ├── configure/       # Experiment configuration view
+│   │   │   │   ├── image/           # Image Lab view & format detectors
+│   │   │   │   ├── implement/       # Code diffs & implementation recommendations
+│   │   │   │   ├── intake/          # Dataset intake, presets & streaming dropzone
+│   │   │   │   ├── layout/          # AppShell, navigation & header
+│   │   │   │   ├── library/         # Engineering technique catalog
+│   │   │   │   ├── overview/        # System dashboard
+│   │   │   │   ├── profile/         # Schema profiler & bottleneck heuristics
+│   │   │   │   ├── report/          # Executive report viewer & manager
+│   │   │   │   ├── settings/        # Workbench & AI provider configuration
+│   │   │   │   ├── stream/          # Stream Lab view & queue monitor
+│   │   │   │   └── workloads/       # Workload catalog
+│   │   │   ├── hooks/               # React hooks (e.g. useDatasetFilter)
+│   │   │   ├── lib/
+│   │   │   │   ├── ai/              # Privacy gateway, knowledge base & providers
+│   │   │   │   ├── benchmark/       # Statistics, runner, correctness & workloads
+│   │   │   │   ├── dataset/         # Ingestion, stream parsers & synthetic generators
+│   │   │   │   ├── image/           # Image processor & canvas transforms
+│   │   │   │   └── storage/         # IndexedDB & in-memory session persistence
+│   │   │   ├── test/                # 24 test suites covering all workbench modules
+│   │   │   ├── types/               # Canonical TypeScript contracts & Zod schemas
+│   │   │   └── workers/             # Dedicated Web Workers (dataset-filter.worker.ts)
+│   │   ├── index.html
+│   │   └── vite.config.ts
+│   └── api/                         # Backend Service (Node.js + Express 5 + Mongoose)
 │       ├── src/
-│       │   ├── auth/              # Auth context, protected route, token memory
-│       │   ├── lib/api/           # Axios API client
-│       │   └── App.tsx
-│       ├── package.json
-│       └── .env                  # Local only; do not commit
-├── docs/
-│   └── authentication.md
-├── infra/
-│   └── docker-compose.yml
-├── .github/                      # GitHub Actions workflows
-├── .husky/                       # Git hooks
-├── .env.example                  # API environment template
-├── docker-compose.yml
-├── package.json
-├── pnpm-workspace.yaml
-├── pnpm-lock.yaml
-├── .nvmrc
-├── .gitignore
-└── README.md
+│       │   ├── common/              # App errors, middleware, request ID
+│       │   ├── config/              # Environment & logger configuration
+│       │   └── modules/             # Auth & Health endpoints
+│       └── tsconfig.json
+├── docs/                            # Architecture and product specification documents
+├── package.json                     # Monorepo root package configuration
+├── pnpm-workspace.yaml              # Workspace package definitions
+├── tsconfig.base.json               # Root TypeScript configuration (erasableSyntaxOnly)
+└── vitest.workspace.ts              # Vitest multi-project runner configuration
 ```
-
-This is a guide to the main project areas; the actual checked-out file tree is authoritative.
 
 ---
 
-## Using this starter for new projects
+## Getting Started
 
-The recommended long-term approach is to keep one canonical `mern-starter` repository and create a separate repository for every application. That keeps authentication, tooling, and infrastructure reusable without coupling individual products together.
+### Prerequisites
 
-### Option A — Recommended: GitHub template repository
+- **Node.js**: `v20.x` or later (LTS recommended)
+- **pnpm**: `v9.x` or later (`corepack enable && corepack prepare pnpm@latest --activate`)
 
-#### 1. Push the starter to GitHub
-
-Create an empty GitHub repository named `mern-starter`. If your local repository already has a README, `.gitignore`, and commits, do not initialize the remote with duplicate files.
-
-From your existing starter directory:
+### Installation
 
 ```bash
-git remote -v
-```
+# Clone the repository
+git clone https://github.com/Error-Krishna/Loadout.git
+cd Loadout
 
-If no `origin` remote exists, add yours and push:
-
-```bash
-git remote add origin YOUR_GITHUB_REPOSITORY_URL
-git push -u origin main
-```
-
-Replace the placeholder with your actual repository URL. If `origin` already exists, verify it before pushing.
-
-#### 2. Enable template mode
-
-On GitHub, open the repository and go to **Settings → General → Template repository**, then enable the template repository option.
-
-GitHub guide: [Creating a template repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-template-repository).
-
-#### 3. Create a project from the template
-
-For each new project:
-
-1. Open the `mern-starter` repository on GitHub.
-2. Select **Use this template → Create a new repository**.
-3. Enter a new repository name, such as `finance-tracker`.
-4. Choose the desired visibility and create the repository.
-5. Clone the newly created repository:
-
-```bash
-git clone YOUR_NEW_REPOSITORY_URL finance-tracker
-cd finance-tracker
+# Install all dependencies across the monorepo
 pnpm install
 ```
 
-A GitHub-generated repository has its own Git history, separate from the template repository.
-
-#### 4. Configure the new project
-
-Create local environment files:
+### Running Locally
 
 ```bash
-cp .env.example apps/api/.env
-cp apps/web/.env.example apps/web/.env
-```
-
-Generate a unique JWT secret using the macOS command in [Quick start](#quick-start), then configure the database name, API port, frontend API URL, and CORS origin for the new project.
-
-Start MongoDB and the app:
-
-```bash
-docker compose up -d
+# Start both Web and API applications in development mode
 pnpm dev
+
+# Or run the Web workbench independently
+pnpm --filter @loadout/web dev
 ```
 
-Run the validation checks before starting product development:
+The frontend workbench will be accessible at `http://localhost:5173`.
+
+---
+
+## Verification & Quality Commands
+
+LOADOUT enforces a strict zero-regression quality gate. All checks must pass cleanly:
 
 ```bash
-pnpm format:check
-pnpm lint
+# 1. Typecheck all workspaces (strict TypeScript, erasableSyntaxOnly)
 pnpm typecheck
+
+# 2. Lint all workspaces (ESLint with zero warnings/errors)
+pnpm lint
+
+# 3. Run the complete automated test suite (191+ tests across 26 test files)
 pnpm test
+
+# 4. Execute production compilation and bundle verification
 pnpm build
 ```
 
-### Option B — Make a local copy
+---
 
-Use this when you want to create a project without GitHub. Run the commands from a terminal on your development machine.
+## Technology Stack
 
-Replace `finance-tracker` with your desired project name:
-
-```bash
-STARTER="$HOME/Development/Personal Projects/mern-starter"
-DEST="$HOME/Development/Personal Projects/finance-tracker"
-
-mkdir -p "$DEST"
-
-rsync -a \
-  --exclude='.git' \
-  --exclude='node_modules' \
-  --exclude='**/node_modules' \
-  --exclude='dist' \
-  --exclude='**/dist' \
-  --exclude='.next' \
-  --exclude='**/.next' \
-  --exclude='apps/api/.env' \
-  --exclude='apps/web/.env' \
-  "$STARTER/" "$DEST/"
-
-cd "$DEST"
-git init
-git branch -M main
-pnpm install
-```
-
-This copies the tracked project content while excluding Git history, installed dependencies, build output, and local app environment files. Review the copied files before committing.
-
-Then create fresh environment files and a unique JWT secret as described in [Quick start](#quick-start). Make the first commit only after checking the new project's configuration and tests.
-
-### Customize each project
-
-**Keep the starter generic; put product-specific business logic in the new project.**
-
-Usually reuse:
-
-- Authentication, authorization, and session infrastructure
-- Environment validation and database connection setup
-- API conventions, error handling, request IDs, and logging
-- Frontend API client and authentication context
-- Testing, linting, formatting, and build configuration
-- Docker-based local database setup
-
-Usually customize:
-
-- Project name, branding, and README
-- Database name and environment variables
-- Frontend pages, layouts, navigation, and UX
-- Domain-specific models, routes, validation, and business logic
-- Integrations, background jobs, and deployment configuration
-
-For example, a finance application might add `transactions`, `budgets`, and `reports` modules. An analytics application might add `datasets`, `dashboards`, and `exports`. These are examples of future project-specific modules, not existing starter modules.
-
-### Keep the starter maintained
-
-When you improve reusable infrastructure:
-
-1. Make the change in the canonical starter repository.
-2. Add or update tests.
-3. Run formatting, lint, type, test, and build checks.
-4. Review the diff for secrets and unrelated changes.
-5. Commit and push the verified change.
-6. Use the updated template for future projects.
-
-Existing projects created from a template do **not** automatically receive future updates. Port improvements into existing projects deliberately and review conflicts rather than overwriting an application with a fresh starter copy.
+| Domain | Technology | Purpose |
+|---|---|---|
+| **Frontend Framework** | React 19, TypeScript (Strict) | Component architecture and state lifecycle |
+| **Build Tool** | Vite 7 | Lightning-fast HMR and optimized production bundles |
+| **Styling** | Tailwind CSS v4, Lucide React | Modern, responsive technical workbench interface |
+| **Routing** | React Router v7 | Deep-linking, navigation history, and breadcrumbs |
+| **DOM Virtualization** | TanStack Virtual (`@tanstack/react-virtual`) | Efficient 60fps rendering of 100k+ row datasets |
+| **Concurrency** | Dedicated Web Workers | Off-thread regex filtering and data processing |
+| **Data Validation** | Zod v4 | Schema parity, benchmark contracts, metric validation |
+| **Local Persistence** | Native IndexedDB API | Privacy-preserving local database with memory fallback |
+| **Testing** | Vitest 3, React Testing Library, jsdom | Fast unit, integration, and E2E pipeline verification |
+| **AI Integration** | Lexical BM25 RAG + BYOK Providers | Grounded performance interpretation with zero data egress |
 
 ---
 
-## Development workflow
+## Privacy & Security Guarantees
 
-A recommended workflow for each change:
-
-1. Create a focused branch.
-2. Implement the feature in the appropriate app or module.
-3. Add or update tests.
-4. Run the relevant checks.
-5. Review the diff for unintended changes, generated files, and secrets.
-6. Commit the change.
-7. Open a pull request and review CI results.
-
-Suggested pre-commit verification:
-
-```bash
-pnpm format:check
-pnpm lint
-pnpm typecheck
-pnpm test
-pnpm build
-git diff --check
-git status --short
-```
-
-If `format:check` reports files that need formatting, run `pnpm format` and inspect the diff before committing.
-
----
-
-## MongoDB infrastructure
-
-The root `docker-compose.yml` is the convenient entry point. It extends the MongoDB service in `infra/docker-compose.yml`.
-
-Start MongoDB:
-
-```bash
-docker compose up -d
-```
-
-Check status and health:
-
-```bash
-docker compose ps
-docker compose logs -f mongodb
-```
-
-Stop the service:
-
-```bash
-docker compose down
-```
-
-MongoDB is exposed on port `27017` for local development and stores data in the named `mongodb_data` volume. **Do not run `docker compose down -v` unless you intend to delete the persistent local database volume.**
-
-If port `27017` is already in use, stop the conflicting service or update the Compose port mapping and MongoDB URI consistently. The supplied Compose configuration is for local development, not an internet-facing production database.
-
----
-
-## Troubleshooting
-
-### API fails during startup with an environment validation error
-
-- Confirm `apps/api/.env` exists.
-- Check that `MONGODB_URI` is non-empty.
-- Ensure `CORS_ORIGIN` is a valid URL.
-- Ensure `API_PORT` is between `1` and `65535`.
-- Ensure `JWT_ACCESS_SECRET` is set to a unique, non-placeholder value.
-- Use an allowed `NODE_ENV` and `LOG_LEVEL` value.
-
-### API cannot connect to MongoDB
-
-- Run `docker compose ps`.
-- Inspect logs with `docker compose logs -f mongodb`.
-- Check `MONGODB_URI` in `apps/api/.env`.
-- Verify port `27017` is available.
-- If the API runs inside a container, `127.0.0.1` refers to that container, not the MongoDB container. Use the appropriate Compose service hostname in the container environment.
-
-### Frontend requests fail
-
-- Confirm the API is running on the expected port.
-- Check `VITE_API_URL` in `apps/web/.env`.
-- Confirm API route prefixes match the implemented routes.
-- Check CORS settings and browser developer tools.
-- Restart Vite after changing environment variables.
-
-### Port already in use
-
-Inspect the error to identify the port. Stop the process that owns it or change the relevant app/Compose configuration. Keep the API port, frontend API URL, and CORS origin consistent.
-
-### Tests fail locally or in CI
-
-- Run the failing app's test command separately.
-- Confirm required environment variables are set.
-- Start required local services if a test needs them.
-- Inspect the failure before changing dependencies.
-- Keep unit tests independent of external services where possible.
-
-### TypeScript or build errors
-
-Run checks separately to isolate the failing package:
-
-```bash
-pnpm --filter @mern/api typecheck
-pnpm --filter @mern/web typecheck
-pnpm --filter @mern/api build
-pnpm --filter @mern/web build
-```
-
----
-
-## Before deploying
-
-This repository is a starter foundation, not a guarantee that every production requirement is complete. Verify and implement the requirements relevant to your application:
-
-- [ ] Authentication, token/session lifecycle, and authorization
-- [ ] Database-backed integration tests for registration, login, refresh, logout, and token reuse
-- [ ] Password reset and account recovery, if required
-- [ ] Rate limiting and abuse prevention on relevant endpoints
-- [ ] Strict input validation and safe error responses
-- [ ] CORS, HTTPS, cookie settings, and CSRF protections appropriate for the deployed topology
-- [ ] Production secrets and environment validation
-- [ ] Database indexes, backups, and data-change strategy
-- [ ] Logging, monitoring, and alerting without exposing sensitive data
-- [ ] Health/readiness checks and graceful shutdown
-- [ ] CI checks and a repeatable deployment process
-- [ ] Dependency and container security review
-- [ ] Deployment smoke tests for critical user flows
-
-Only mark an item complete after verifying it in code and in the deployed environment.
+- **No Data Egress**: Workloads and uploaded files remain entirely client-side.
+- **Sanitized Telemetry**: Context sent to the AI Copilot includes only schema statistics and aggregated run distributions.
+- **Inspectable AI Payloads**: Developers can inspect the exact JSON payload dispatched to LLM providers via the Copilot drawer.
+- **Offline By Default**: The workbench functions fully without an active internet connection using the built-in `OfflineAIProvider`.
 
 ---
 
 ## License
 
-Add the license appropriate for your project before distributing or publishing this starter. Until a license is included, do not assume others have permission to reuse or redistribute the code.
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.

@@ -1,32 +1,43 @@
-# React + TypeScript + Vite
+# @loadout/web — LOADOUT Workbench Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+The core client-side application for LOADOUT Version 2.0, an AI-assisted performance engineering workbench. Built with React 19, TypeScript, Vite 7, and Tailwind CSS v4.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Highlights
 
-## React Compiler
+- **Workload Laboratories**:
+  - **Dataset Lab**: RFC 4180 streaming ingestion, schema profiler, controlled benchmark runner, correctness gate, and live implementation guide.
+  - **Image Lab**: AVIF/WebP/JPEG format detection, main-thread vs offscreen canvas transforms, memory lifecycle management.
+  - **Stream Lab**: High-frequency streaming simulation (500–10,000 msgs/sec), backpressure drop strategies, and visual coalescing.
+- **Milestone 1 Benchmark Engine**:
+  - Deterministic execution runner with warmup discard and inter-run cooldowns (`runner.ts`).
+  - Pure statistical aggregation: sample variance, percentiles, Mann-Whitney U hypothesis testing (`statistics.ts`).
+  - Semantic Correctness Gate: record parity, field parity, deep value comparison, 64-bit hashing (`correctness.ts`).
+- **AI Copilot & Privacy Gateway**:
+  - Strict zero-leakage privacy boundary (`privacy-gateway.ts`).
+  - In-memory RAG retrieval with verified technical citations (`knowledge/`).
+  - Multi-provider support: Offline heuristic engine, OpenAI, and Gemini (`providers/`).
+- **Local Persistence**:
+  - Native IndexedDB promisified storage with transparent in-memory fallback (`db.ts`, `session-store.ts`).
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+---
 
-## Expanding the Oxlint configuration
+## Development & Testing
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+```bash
+# Start development server with HMR
+pnpm dev
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+# Run TypeScript typecheck
+pnpm typecheck
+
+# Run ESLint
+pnpm lint
+
+# Run all test suites with Vitest
+pnpm test
+
+# Build production bundle
+pnpm build
 ```
-
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.

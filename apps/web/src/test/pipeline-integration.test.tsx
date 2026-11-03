@@ -2,7 +2,12 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { generateSyntheticDataset, SYNTHETIC_PRESETS } from '../lib/dataset/synthetic';
 import { parseDatasetRows } from '../lib/dataset/parser';
 import { runDatasetComparisonSuite } from '../lib/benchmark/workloads/dataset-benchmark-suite';
-import { saveSession, loadSession, saveBenchmarkResult, getBenchmarkResult } from '../lib/storage/session-store';
+import {
+  saveSession,
+  loadSession,
+  saveBenchmarkResult,
+  getBenchmarkResult,
+} from '../lib/storage/session-store';
 import { createMemoryStorage, setStorageAdapter } from '../lib/storage/db';
 import { OfflineAIProvider } from '../lib/ai/providers';
 import { PrivacyGateway } from '../lib/ai/privacy-gateway';
