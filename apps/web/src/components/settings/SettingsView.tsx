@@ -1,19 +1,112 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import {
+  loadSettings,
+  saveSettings,
+  purgeAllWorkbenchData,
+  exportWorkbenchData,
+  importWorkbenchData,
+} from '../../lib/storage/session-store';
+import type { ExportBundle } from '../../types/storage';
 
 export default function SettingsView() {
   const [workerLimit, setWorkerLimit] = useState<number>(4);
   const [domCap, setDomCap] = useState<number>(5000);
   const [memoryWarningMb, setMemoryWarningMb] = useState<number>(50);
-  const [clearedMessage, setClearedMessage] = useState<string | null>(null);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState<boolean>(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  function handleClearStorage() {
+  useEffect(() => {
+    let isSubscribed = true;
+    loadSettings().then((saved) => {
+      if (!isSubscribed) return;
+      setWorkerLimit(saved.workerLimit);
+      setDomCap(saved.domCap);
+      setMemoryWarningMb(saved.memoryWarningMb);
+    }).catch(() => {});
+
+    return () => {
+      isSubscribed = false;
+    };
+  }, []);
+
+  function handleSave(limit: number, cap: number, mem: number) {
+    saveSettings({
+      workerLimit: limit,
+      domCap: cap,
+      memoryWarningMb: mem,
+      telemetryOptIn: false,
+      aiMode: 'disabled',
+    }).catch(() => {});
+  }
+
+  function handleWorkerLimitChange(n: number) {
+    setWorkerLimit(n);
+    handleSave(n, domCap, memoryWarningMb);
+  }
+
+  function handleDomCapChange(cap: number) {
+    setDomCap(cap);
+    handleSave(workerLimit, cap, memoryWarningMb);
+  }
+
+  function handleMemoryCeilingChange(mem: number) {
+    setMemoryWarningMb(mem);
+    handleSave(workerLimit, domCap, mem);
+  }
+
+  async function handleClearStorage() {
     try {
+      await purgeAllWorkbenchData();
       localStorage.clear();
       sessionStorage.clear();
-      setClearedMessage('✓ Local client storage and caches successfully purged.');
-      setTimeout(() => setClearedMessage(null), 3000);
+      setActionMessage('✓ Local IndexedDB & caches purged.');
+      setTimeout(() => setActionMessage(null), 3000);
     } catch {
-      setClearedMessage('Storage cleared.');
+      setActionMessage('Storage cleared.');
+    }
+  }
+
+  async function handleExport() {
+    try {
+      setIsExporting(true);
+      const bundle = await exportWorkbenchData();
+      const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `loadout-workbench-bundle-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setActionMessage('✓ Export downloaded.');
+      setTimeout(() => setActionMessage(null), 3000);
+    } catch (err) {
+      setActionMessage(`Export error: ${(err as Error).message}`);
+    } finally {
+      setIsExporting(false);
+    }
+  }
+
+  async function handleImport(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const bundle = JSON.parse(text) as ExportBundle;
+      const summary = await importWorkbenchData(bundle);
+      setActionMessage(
+        `✓ Imported: ${summary.reportsImported} reports, ${summary.benchmarkResultsImported} benchmarks.`,
+      );
+      setTimeout(() => setActionMessage(null), 4000);
+      const newSettings = await loadSettings();
+      setWorkerLimit(newSettings.workerLimit);
+      setDomCap(newSettings.domCap);
+      setMemoryWarningMb(newSettings.memoryWarningMb);
+    } catch (err) {
+      setActionMessage(`Import error: ${(err as Error).message}`);
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   }
 
@@ -47,7 +140,7 @@ export default function SettingsView() {
                 <button
                   key={n}
                   type="button"
-                  onClick={() => setWorkerLimit(n)}
+                  onClick={() => handleWorkerLimitChange(n)}
                   className={`flex-1 py-1 rounded transition-colors ${
                     workerLimit === n
                       ? 'bg-cyan-950 text-cyan-300 border border-cyan-800 font-bold'
@@ -73,7 +166,7 @@ export default function SettingsView() {
               max={10000}
               step={1000}
               value={domCap}
-              onChange={(e) => setDomCap(Number(e.target.value))}
+              onChange={(e) => handleDomCapChange(Number(e.target.value))}
               className="w-full accent-rose-500 cursor-pointer"
             />
             <p className="text-[11px] text-slate-500">
@@ -93,13 +186,51 @@ export default function SettingsView() {
               max={150}
               step={10}
               value={memoryWarningMb}
-              onChange={(e) => setMemoryWarningMb(Number(e.target.value))}
+              onChange={(e) => handleMemoryCeilingChange(Number(e.target.value))}
               className="w-full accent-amber-500 cursor-pointer"
             />
             <p className="text-[11px] text-slate-500">
               Warns when heap allocation exceeds ceiling.
             </p>
           </div>
+        </div>
+      </div>
+
+      {/* Data Portability (Export & Import) */}
+      <div className="p-6 rounded-lg border border-slate-800 bg-[var(--color-surface)] space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-100 font-mono">
+            Workbench Data Portability
+          </h3>
+          <p className="text-xs text-slate-400 mt-0.5">
+            Export or restore your benchmark history, experiment dossiers, and workbench settings as a portable JSON bundle.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={handleExport}
+            disabled={isExporting}
+            className="px-4 py-2 text-xs font-mono rounded bg-cyan-950 hover:bg-cyan-900 text-cyan-300 border border-cyan-800 transition-colors"
+          >
+            {isExporting ? 'Exporting...' : 'Export Workspace Bundle'}
+          </button>
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json,application/json"
+            onChange={handleImport}
+            className="hidden"
+            id="import-bundle-file"
+          />
+          <label
+            htmlFor="import-bundle-file"
+            className="px-4 py-2 text-xs font-mono rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 cursor-pointer transition-colors"
+          >
+            Import Workspace Bundle
+          </label>
         </div>
       </div>
 
@@ -129,8 +260,8 @@ export default function SettingsView() {
         </div>
 
         <div className="flex items-center gap-3">
-          {clearedMessage && (
-            <span className="text-xs font-mono text-emerald-400">{clearedMessage}</span>
+          {actionMessage && (
+            <span className="text-xs font-mono text-emerald-400">{actionMessage}</span>
           )}
           <button
             type="button"

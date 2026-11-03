@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { WorkbenchView, AnalysisStep } from '../../types/navigation';
 import type { LoadedDataset, AnalysisConfiguration } from '../../types/dataset';
 import type { BenchmarkComparisonRecord } from '../../types/benchmark';
+import type { WorkbenchSession } from '../../types/storage';
+import { saveSession, loadSession } from '../../lib/storage/session-store';
 import { generateSyntheticDataset, SYNTHETIC_PRESETS } from '../../lib/dataset/synthetic';
 import DatasetIntake from '../intake/DatasetIntake';
 import AnalysisConfigView from '../configure/AnalysisConfigView';
@@ -47,6 +49,43 @@ export default function AppShell() {
   const [dataset, setDataset] = useState<LoadedDataset | null>(null);
   const [config, setConfig] = useState<AnalysisConfiguration>(DEFAULT_CONFIG);
   const [comparisonRecord, setComparisonRecord] = useState<BenchmarkComparisonRecord | null>(null);
+
+  // Restore session from local IndexedDB on mount (Phase 3)
+  useEffect(() => {
+    let isMounted = true;
+    loadSession().then((saved) => {
+      if (!isMounted || !saved) return;
+      setActiveView(saved.activeView);
+      setActiveStep(saved.activeStep);
+      if (saved.config) setConfig(saved.config);
+      if (saved.activeBenchmarkRecord) setComparisonRecord(saved.activeBenchmarkRecord);
+      if (saved.persistedDataset) {
+        setDataset(saved.persistedDataset);
+      }
+    }).catch(() => {});
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Autosave session state to local IndexedDB
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      const sessionToSave: WorkbenchSession = {
+        id: 'active_workbench_session',
+        activeView,
+        activeStep,
+        persistedDataset: dataset,
+        config,
+        activeBenchmarkRecord: comparisonRecord,
+        updatedAt: new Date().toISOString(),
+      };
+      saveSession(sessionToSave).catch(() => {});
+    }, 250);
+
+    return () => clearTimeout(timeoutId);
+  }, [activeView, activeStep, dataset, config, comparisonRecord]);
 
   function handleDatasetLoaded(loaded: LoadedDataset) {
     setDataset(loaded);

@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { ExperimentReport } from '../../types/dataset';
+import { getAllReports, deleteReport } from '../../lib/storage/session-store';
 
 export const INITIAL_REPORTS: ExperimentReport[] = [
   {
@@ -74,14 +75,43 @@ interface ReportsManagerViewProps {
 }
 
 export default function ReportsManagerView({ customReports }: ReportsManagerViewProps) {
-  const [reports] = useState<ExperimentReport[]>(() => {
+  const [reports, setReports] = useState<ExperimentReport[]>(() => {
     if (customReports && customReports.length > 0) {
       return [...customReports, ...INITIAL_REPORTS];
     }
     return INITIAL_REPORTS;
   });
-  const [selectedReport, setSelectedReport] = useState<ExperimentReport>(reports[0]!);
+  const [selectedReport, setSelectedReport] = useState<ExperimentReport>(() => reports[0] || INITIAL_REPORTS[0]!);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isSubscribed = true;
+    getAllReports().then((persistedReports) => {
+      if (!isSubscribed) return;
+      if (persistedReports.length > 0) {
+        // Merge persisted reports with built-in templates, deduplicating by ID
+        const existingIds = new Set(persistedReports.map((r) => r.id));
+        const combined = [
+          ...persistedReports,
+          ...INITIAL_REPORTS.filter((r) => !existingIds.has(r.id)),
+        ];
+        setReports(combined);
+        setSelectedReport(combined[0]!);
+      }
+    }).catch(() => {});
+
+    return () => {
+      isSubscribed = false;
+    };
+  }, []);
+
+  async function handleDeleteReport(repId: string) {
+    await deleteReport(repId).catch(() => {});
+    const remaining = reports.filter((r) => r.id !== repId);
+    const fallback = remaining.length > 0 ? remaining : INITIAL_REPORTS;
+    setReports(fallback);
+    setSelectedReport(fallback[0]!);
+  }
 
   function handleCopyMarkdown(rep: ExperimentReport) {
     const md = `## 🔬 LOADOUT Performance Experiment Dossier
@@ -194,6 +224,17 @@ ${rep.verifiedTradeoffs.map((t) => `- ${t}`).join('\n')}
               >
                 Download JSON
               </button>
+              {!['rep_ecommerce_inventory_25k', 'rep_financial_ledger_50k'].includes(
+                selectedReport.id,
+              ) && (
+                <button
+                  type="button"
+                  onClick={() => handleDeleteReport(selectedReport.id)}
+                  className="px-3 py-1.5 text-xs font-mono rounded bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 border border-rose-800/80 transition-colors"
+                >
+                  Delete
+                </button>
+              )}
             </div>
           </div>
 
