@@ -1,16 +1,17 @@
 /// <reference lib="webworker" />
 
-import type {
-  FilterWorkerInboundMessage,
-  FilterWorkerOutboundMessage,
-} from '../types/dataset';
+import type { FilterWorkerInboundMessage, FilterWorkerOutboundMessage } from '../types/dataset';
 
 // In-worker cached state: dataset rows are initialized ONCE to eliminate repeated structured cloning
 let cachedDatasetId: string | null = null;
 let cachedRows: Record<string, unknown>[] = [];
 let cachedColumns: string[] = [];
 
-function executeFilter(query: string, rows: Record<string, unknown>[], columns: string[]): number[] {
+function executeFilter(
+  query: string,
+  rows: Record<string, unknown>[],
+  columns: string[],
+): number[] {
   const lowerQuery = query.toLowerCase().trim();
   const filteredIndices: number[] = [];
 
@@ -51,7 +52,12 @@ self.onmessage = (event: MessageEvent<FilterWorkerInboundMessage>) => {
   try {
     // 1. Dataset Initialization message (Cached once)
     if ('type' in data && data.type === 'init') {
-      const initData = data as { type: 'init'; datasetId: string; rows: Record<string, unknown>[]; columns: string[] };
+      const initData = data as {
+        type: 'init';
+        datasetId: string;
+        rows: Record<string, unknown>[];
+        columns: string[];
+      };
       cachedDatasetId = initData.datasetId;
       cachedRows = initData.rows ?? [];
       cachedColumns = initData.columns ?? [];
@@ -91,7 +97,12 @@ self.onmessage = (event: MessageEvent<FilterWorkerInboundMessage>) => {
     }
 
     // 4. Legacy fallback: request containing rows directly
-    const legacyData = data as { id: number; query: string; rows?: Record<string, unknown>[]; columns?: string[] };
+    const legacyData = data as {
+      id: number;
+      query: string;
+      rows?: Record<string, unknown>[];
+      columns?: string[];
+    };
     if (legacyData.rows && Array.isArray(legacyData.rows)) {
       const start = performance.now();
       const rows = legacyData.rows;
@@ -109,7 +120,8 @@ self.onmessage = (event: MessageEvent<FilterWorkerInboundMessage>) => {
   } catch (err) {
     const errorMsg: FilterWorkerOutboundMessage = {
       type: 'error',
-      id: typeof (data as { id?: number }).id === 'number' ? (data as { id: number }).id : undefined,
+      id:
+        typeof (data as { id?: number }).id === 'number' ? (data as { id: number }).id : undefined,
       message: (err as Error).message || String(err),
     };
     self.postMessage(errorMsg);

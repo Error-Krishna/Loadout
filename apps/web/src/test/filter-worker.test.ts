@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type {
-  FilterWorkerInboundMessage,
-  FilterWorkerOutboundMessage,
-} from '../types/dataset';
+import type { FilterWorkerInboundMessage, FilterWorkerOutboundMessage } from '../types/dataset';
 
 describe('dataset filter worker messaging optimization (M1-T05)', () => {
   const sampleRows = [

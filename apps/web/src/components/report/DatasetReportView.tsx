@@ -44,7 +44,10 @@ function buildReportFromRecord(
         domNodes: baseDom,
         renderTimeMs: baseMedian,
         memoryEstimateMb: Number(
-          (((record.baseline.estimatedMemoryBytes?.value ?? dataset.sizeBytes * 2) / (1024 * 1024))).toFixed(1),
+          (
+            (record.baseline.estimatedMemoryBytes?.value ?? dataset.sizeBytes * 2) /
+            (1024 * 1024)
+          ).toFixed(1),
         ),
       },
       candidateMetrics: {
@@ -115,7 +118,9 @@ export default function DatasetReportView({
     [dataset, comparisonRecord],
   );
 
-  const isMeasured = Boolean(comparisonRecord && comparisonRecord.baseline.distribution.sampleCount > 0);
+  const isMeasured = Boolean(
+    comparisonRecord && comparisonRecord.baseline.distribution.sampleCount > 0,
+  );
 
   const markdownSummary = `## 🔬 LOADOUT Performance Experiment Report
 **Workload:** \`${report.workloadName}\` (${report.rowCount.toLocaleString()} rows, ${report.workloadFormat.toUpperCase()})  
@@ -202,8 +207,8 @@ ${report.verifiedTradeoffs.map((t) => `- ${t}`).join('\n')}
           <p className="font-bold">⚠️ Unbenchmarked Workload Preview</p>
           <p className="text-amber-400/80">
             This dataset has not yet undergone repeated benchmark execution. To capture genuine
-            execution durations, trial distributions, and correctness gates, navigate back to Step 04
-            (Compare) and run the automated benchmark suite.
+            execution durations, trial distributions, and correctness gates, navigate back to Step
+            04 (Compare) and run the automated benchmark suite.
           </p>
         </div>
       )}
@@ -307,7 +312,9 @@ ${report.verifiedTradeoffs.map((t) => `- ${t}`).join('\n')}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-slate-300 pt-1">
             <div>
               <span className="text-slate-500 block text-[10px]">Record Parity</span>
-              <span>{comparisonRecord.correctness.recordCountParity ? '✓ Preserved' : '✗ Failed'}</span>
+              <span>
+                {comparisonRecord.correctness.recordCountParity ? '✓ Preserved' : '✗ Failed'}
+              </span>
             </div>
             <div>
               <span className="text-slate-500 block text-[10px]">Schema Parity</span>
@@ -315,11 +322,15 @@ ${report.verifiedTradeoffs.map((t) => `- ${t}`).join('\n')}
             </div>
             <div>
               <span className="text-slate-500 block text-[10px]">Null Semantics</span>
-              <span>{comparisonRecord.correctness.nullSemanticsPreserved ? '✓ Preserved' : '✗ Failed'}</span>
+              <span>
+                {comparisonRecord.correctness.nullSemanticsPreserved ? '✓ Preserved' : '✗ Failed'}
+              </span>
             </div>
             <div>
               <span className="text-slate-500 block text-[10px]">Sample Hash</span>
-              <span>{comparisonRecord.correctness.sampleHashParity ? '✓ Identical' : '✗ Divergent'}</span>
+              <span>
+                {comparisonRecord.correctness.sampleHashParity ? '✓ Identical' : '✗ Divergent'}
+              </span>
             </div>
           </div>
 

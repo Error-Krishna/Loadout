@@ -1,4 +1,21 @@
-export type DatasetFormat = 'csv' | 'json';
+export type DatasetFormat = 'csv' | 'json' | 'ndjson';
+
+export interface IngestionProgress {
+  bytesProcessed: number;
+  totalBytes: number;
+  percent: number;
+  rowsParsed: number;
+  phase: 'reading' | 'parsing' | 'profiling' | 'completed';
+}
+
+export interface StreamParserOptions {
+  chunkSizeBytes?: number;
+  maxRows?: number;
+  delimiter?: string;
+  signal?: AbortSignal;
+  onProgress?: (progress: IngestionProgress) => void;
+  yieldIntervalMs?: number;
+}
 
 export interface LoadedDataset {
   name: string;
@@ -64,7 +81,13 @@ export type FilterWorkerInboundMessage =
   | { type: 'init'; datasetId: string; rows: Record<string, unknown>[]; columns: string[] }
   | { type: 'filter'; id: number; query: string }
   | { type: 'clear' }
-  | { type?: undefined; id: number; query: string; rows: Record<string, unknown>[]; columns: string[] };
+  | {
+      type?: undefined;
+      id: number;
+      query: string;
+      rows: Record<string, unknown>[];
+      columns: string[];
+    };
 
 export type FilterWorkerOutboundMessage =
   | { type: 'ready'; datasetId: string; rowCount: number }

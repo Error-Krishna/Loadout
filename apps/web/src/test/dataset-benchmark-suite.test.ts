@@ -96,7 +96,8 @@ describe('Dataset Benchmark Suite Coordinator (M1-T04 & M1-T06)', () => {
         divergenceDetails: ['[value] at [0].name: expected "User 0", received "Corrupted"'],
       },
       verdict: 'invalid' as const,
-      verdictReason: 'Correctness verification failed: Semantic divergence detected in candidate output.',
+      verdictReason:
+        'Correctness verification failed: Semantic divergence detected in candidate output.',
     };
 
     expect(corruptedRecord.verdict).toBe('invalid');

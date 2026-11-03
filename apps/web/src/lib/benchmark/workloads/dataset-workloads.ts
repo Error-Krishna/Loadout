@@ -14,12 +14,11 @@
 import type { WorkloadAdapter } from '../runner.ts';
 import { verifyCorrectness, type CorrectnessVerificationResult } from '../correctness.ts';
 
-export interface SynchronousWorkloadAdapter<TContext, TOutput>
-  extends WorkloadAdapter<TContext, TOutput> {
-  execute: (
-    context: TContext,
-    trialInfo: { iteration: number; isWarmup: boolean },
-  ) => TOutput;
+export interface SynchronousWorkloadAdapter<TContext, TOutput> extends WorkloadAdapter<
+  TContext,
+  TOutput
+> {
+  execute: (context: TContext, trialInfo: { iteration: number; isWarmup: boolean }) => TOutput;
 }
 
 // ============================================================================

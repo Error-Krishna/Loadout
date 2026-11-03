@@ -87,7 +87,9 @@ export async function runDatasetComparisonSuite(
     });
 
     if (baselineRun.status !== 'completed' || !baselineRun.distribution) {
-      throw new Error(`Baseline benchmark failed or was halted: ${baselineRun.error || baselineRun.status}`);
+      throw new Error(
+        `Baseline benchmark failed or was halted: ${baselineRun.error || baselineRun.status}`,
+      );
     }
 
     const candidateAdapter: WorkloadAdapter<FilterWorkloadContext, FilterWorkloadOutput> = {
@@ -102,12 +104,20 @@ export async function runDatasetComparisonSuite(
     });
 
     if (candidateRun.status !== 'completed' || !candidateRun.distribution) {
-      throw new Error(`Candidate benchmark failed or was halted: ${candidateRun.error || candidateRun.status}`);
+      throw new Error(
+        `Candidate benchmark failed or was halted: ${candidateRun.error || candidateRun.status}`,
+      );
     }
 
     // Correctness verification executed OUTSIDE timed measurement interval
-    const baseOutput = naiveFilterWorkload.execute(filterContext, { iteration: 1, isWarmup: false });
-    const candOutput = optimizedFilterWorkload.execute(filterContext, { iteration: 1, isWarmup: false });
+    const baseOutput = naiveFilterWorkload.execute(filterContext, {
+      iteration: 1,
+      isWarmup: false,
+    });
+    const candOutput = optimizedFilterWorkload.execute(filterContext, {
+      iteration: 1,
+      isWarmup: false,
+    });
     correctnessResult = verifyFilterOutputCorrectness(baseOutput, candOutput);
 
     const baseMatched = baseOutput.matchedIndices.length;
@@ -117,7 +127,11 @@ export async function runDatasetComparisonSuite(
       variantId: 'filter-naive-baseline',
       variantLabel: 'Naive Synchronous Search',
       distribution: baselineRun.distribution,
-      domNodeCount: createProvenancedValue(0, 'measured', 'DOM count not applicable for pure filter search'),
+      domNodeCount: createProvenancedValue(
+        0,
+        'measured',
+        'DOM count not applicable for pure filter search',
+      ),
       estimatedMemoryBytes: createProvenancedValue(
         baseMatched * 128,
         'estimated',
@@ -129,7 +143,11 @@ export async function runDatasetComparisonSuite(
       variantId: 'filter-optimized-candidate',
       variantLabel: 'Optimized Tokenized Search',
       distribution: candidateRun.distribution,
-      domNodeCount: createProvenancedValue(0, 'measured', 'DOM count not applicable for pure filter search'),
+      domNodeCount: createProvenancedValue(
+        0,
+        'measured',
+        'DOM count not applicable for pure filter search',
+      ),
       estimatedMemoryBytes: createProvenancedValue(
         candMatched * 128,
         'estimated',
@@ -159,7 +177,9 @@ export async function runDatasetComparisonSuite(
     });
 
     if (baselineRun.status !== 'completed' || !baselineRun.distribution) {
-      throw new Error(`Baseline benchmark failed or was halted: ${baselineRun.error || baselineRun.status}`);
+      throw new Error(
+        `Baseline benchmark failed or was halted: ${baselineRun.error || baselineRun.status}`,
+      );
     }
 
     const candidateAdapter: WorkloadAdapter<RenderWorkloadContext, RenderWorkloadOutput> = {
@@ -174,14 +194,22 @@ export async function runDatasetComparisonSuite(
     });
 
     if (candidateRun.status !== 'completed' || !candidateRun.distribution) {
-      throw new Error(`Candidate benchmark failed or was halted: ${candidateRun.error || candidateRun.status}`);
+      throw new Error(
+        `Candidate benchmark failed or was halted: ${candidateRun.error || candidateRun.status}`,
+      );
     }
 
     // Correctness verification executed OUTSIDE timed interval
-    const candidateOutput = virtualizedRenderWorkload.execute(renderContext, { iteration: 1, isWarmup: false });
+    const candidateOutput = virtualizedRenderWorkload.execute(renderContext, {
+      iteration: 1,
+      isWarmup: false,
+    });
     correctnessResult = verifyRenderOutputCorrectness(renderContext, candidateOutput);
 
-    const baseOutput = naiveRenderWorkload.execute(renderContext, { iteration: 1, isWarmup: false });
+    const baseOutput = naiveRenderWorkload.execute(renderContext, {
+      iteration: 1,
+      isWarmup: false,
+    });
 
     baselineVariant = {
       variantId: 'render-naive-baseline',
@@ -262,10 +290,7 @@ export async function runDatasetComparisonSuite(
       domNodesDelta: domDelta,
       domNodesChangePct: domPct,
     },
-    warnings: [
-      ...assessment.warnings,
-      ...(correctnessResult.warnings || []),
-    ],
+    warnings: [...assessment.warnings, ...(correctnessResult.warnings || [])],
     createdAt: timestamp,
   };
 
