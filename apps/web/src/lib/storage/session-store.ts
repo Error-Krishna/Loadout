@@ -56,7 +56,9 @@ export async function saveBenchmarkResult(record: BenchmarkComparisonRecord): Pr
 /**
  * Retrieves a benchmark comparison record by its unique identifier.
  */
-export async function getBenchmarkResult(id: string): Promise<BenchmarkComparisonRecord | undefined> {
+export async function getBenchmarkResult(
+  id: string,
+): Promise<BenchmarkComparisonRecord | undefined> {
   const storage = getStorage();
   return await storage.get<BenchmarkComparisonRecord>('benchmarkResults', id);
 }

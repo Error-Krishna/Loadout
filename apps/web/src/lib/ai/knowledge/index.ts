@@ -123,7 +123,10 @@ export const CURATED_KNOWLEDGE_CHUNKS: KnowledgeDocChunk[] = [
 /**
  * In-browser keyword / BM25 style retriever for the curated knowledge base.
  */
-export function queryKnowledgeBase(query: string, maxResults = 3): { chunk: KnowledgeDocChunk; score: number }[] {
+export function queryKnowledgeBase(
+  query: string,
+  maxResults = 3,
+): { chunk: KnowledgeDocChunk; score: number }[] {
   if (!query || query.trim().length === 0) {
     return [];
   }
@@ -168,7 +171,9 @@ export function queryKnowledgeBase(query: string, maxResults = 3): { chunk: Know
 /**
  * Converts knowledge chunks into citations.
  */
-export function createCitations(results: { chunk: KnowledgeDocChunk; score: number }[]): AICitation[] {
+export function createCitations(
+  results: { chunk: KnowledgeDocChunk; score: number }[],
+): AICitation[] {
   return results.map(({ chunk }) => ({
     sourceId: chunk.id,
     title: chunk.title,

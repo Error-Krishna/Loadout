@@ -227,7 +227,10 @@ function parseInferredPrimitive(val: string): string | number | boolean | null {
   if (trimmed === 'false' || trimmed === 'FALSE') return false;
 
   // Numeric check (reject hex or leading zero codes like phone numbers / zip codes)
-  if (/^-?\d+(\.\d+)?$/.test(trimmed) && !(trimmed.length > 1 && trimmed.startsWith('0') && !trimmed.startsWith('0.'))) {
+  if (
+    /^-?\d+(\.\d+)?$/.test(trimmed) &&
+    !(trimmed.length > 1 && trimmed.startsWith('0') && !trimmed.startsWith('0.'))
+  ) {
     const num = Number(trimmed);
     if (!Number.isNaN(num)) return num;
   }
@@ -271,7 +274,12 @@ export async function streamParseFile(
       phase: 'parsing',
     });
 
-    let res: { columns: string[]; rows: Record<string, unknown>[]; totalRows: number; warnings?: string[] };
+    let res: {
+      columns: string[];
+      rows: Record<string, unknown>[];
+      totalRows: number;
+      warnings?: string[];
+    };
     if (format === 'csv') {
       res = parseCsvRecords(fileOrText, options.delimiter ?? ',', maxRows);
     } else if (format === 'ndjson') {
@@ -358,7 +366,12 @@ export async function streamParseFile(
     phase: 'parsing',
   });
 
-  let parsedData: { columns: string[]; rows: Record<string, unknown>[]; totalRows: number; warnings?: string[] };
+  let parsedData: {
+    columns: string[];
+    rows: Record<string, unknown>[];
+    totalRows: number;
+    warnings?: string[];
+  };
   try {
     if (format === 'csv') {
       parsedData = parseCsvRecords(fullText, options.delimiter ?? ',', maxRows);

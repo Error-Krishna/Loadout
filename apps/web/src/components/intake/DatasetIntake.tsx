@@ -259,7 +259,8 @@ export default function DatasetIntake({ onDatasetLoaded }: DatasetIntakeProps) {
               Synthetic Benchmark Presets
             </h2>
             <p className="text-xs text-slate-500 font-mono">
-              Deterministic synthetic datasets designed to stress-test DOM limits and virtualization.
+              Deterministic synthetic datasets designed to stress-test DOM limits and
+              virtualization.
             </p>
           </div>
           <span className="text-[11px] font-mono text-slate-500 uppercase tracking-wider">

@@ -81,24 +81,28 @@ export default function ReportsManagerView({ customReports }: ReportsManagerView
     }
     return INITIAL_REPORTS;
   });
-  const [selectedReport, setSelectedReport] = useState<ExperimentReport>(() => reports[0] || INITIAL_REPORTS[0]!);
+  const [selectedReport, setSelectedReport] = useState<ExperimentReport>(
+    () => reports[0] || INITIAL_REPORTS[0]!,
+  );
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   useEffect(() => {
     let isSubscribed = true;
-    getAllReports().then((persistedReports) => {
-      if (!isSubscribed) return;
-      if (persistedReports.length > 0) {
-        // Merge persisted reports with built-in templates, deduplicating by ID
-        const existingIds = new Set(persistedReports.map((r) => r.id));
-        const combined = [
-          ...persistedReports,
-          ...INITIAL_REPORTS.filter((r) => !existingIds.has(r.id)),
-        ];
-        setReports(combined);
-        setSelectedReport(combined[0]!);
-      }
-    }).catch(() => {});
+    getAllReports()
+      .then((persistedReports) => {
+        if (!isSubscribed) return;
+        if (persistedReports.length > 0) {
+          // Merge persisted reports with built-in templates, deduplicating by ID
+          const existingIds = new Set(persistedReports.map((r) => r.id));
+          const combined = [
+            ...persistedReports,
+            ...INITIAL_REPORTS.filter((r) => !existingIds.has(r.id)),
+          ];
+          setReports(combined);
+          setSelectedReport(combined[0]!);
+        }
+      })
+      .catch(() => {});
 
     return () => {
       isSubscribed = false;

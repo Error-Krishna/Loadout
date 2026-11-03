@@ -190,7 +190,10 @@ describe('AI Foundation, Privacy Gateway & RAG Copilot (Phases 6-10)', () => {
         activeBenchmark: dummyBenchmarkRecord,
       });
 
-      const response = await provider.generateResponse('Interpret current benchmark results', sanitized);
+      const response = await provider.generateResponse(
+        'Interpret current benchmark results',
+        sanitized,
+      );
 
       expect(response.content).toContain('Benchmark Technical Evaluation');
       expect(response.content).toContain('440 ms');
@@ -249,7 +252,10 @@ describe('AI Foundation, Privacy Gateway & RAG Copilot (Phases 6-10)', () => {
         },
       });
 
-      const response = await provider.generateResponse('Plan an optimization experiment for large tables', sanitized);
+      const response = await provider.generateResponse(
+        'Plan an optimization experiment for large tables',
+        sanitized,
+      );
 
       expect(response.content).toContain('Controlled Experiment Plan');
       expect(response.content).toContain('Baseline Variant');

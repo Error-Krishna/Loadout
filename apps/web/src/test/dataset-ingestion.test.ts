@@ -47,7 +47,7 @@ describe('Robust Dataset Ingestion Engine (Phase Two)', () => {
     });
 
     it('handles CRLF (\\r\\n) and trailing newlines gracefully', () => {
-      const csv = "id,name\r\n1,Alice\r\n2,Bob\r\n";
+      const csv = 'id,name\r\n1,Alice\r\n2,Bob\r\n';
       const res = parseCsvRecords(csv);
 
       expect(res.columns).toEqual(['id', 'name']);

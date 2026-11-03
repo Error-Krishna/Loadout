@@ -191,7 +191,11 @@ export class OpenAIProvider implements AIProvider {
   private model: string;
   private offlineFallback: OfflineAIProvider;
 
-  constructor(apiKey: string, endpoint = 'https://api.openai.com/v1/chat/completions', model = 'gpt-4o-mini') {
+  constructor(
+    apiKey: string,
+    endpoint = 'https://api.openai.com/v1/chat/completions',
+    model = 'gpt-4o-mini',
+  ) {
     this.apiKey = apiKey;
     this.endpoint = endpoint;
     this.model = model;

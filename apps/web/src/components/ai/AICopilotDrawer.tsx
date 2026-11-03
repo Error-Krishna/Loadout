@@ -37,7 +37,10 @@ let msgSequence = 0;
 function createMessage(
   role: 'user' | 'assistant',
   content: string,
-  extra?: { citations?: import('../../types/ai.ts').AICitation[]; suggestedActions?: import('../../types/ai.ts').AISuggestedAction[] },
+  extra?: {
+    citations?: import('../../types/ai.ts').AICitation[];
+    suggestedActions?: import('../../types/ai.ts').AISuggestedAction[];
+  },
 ): AIMessage {
   msgSequence += 1;
   return {
@@ -91,7 +94,10 @@ export default function AICopilotDrawer({
 
       setMessages((prev) => [...prev, assistantMsg]);
     } catch (err) {
-      const errorMsg = createMessage('assistant', `⚠️ Failed to generate analysis: ${(err as Error).message}`);
+      const errorMsg = createMessage(
+        'assistant',
+        `⚠️ Failed to generate analysis: ${(err as Error).message}`,
+      );
       setMessages((prev) => [...prev, errorMsg]);
     } finally {
       setIsGenerating(false);
@@ -256,9 +262,7 @@ export default function AICopilotDrawer({
         </button>
         <button
           type="button"
-          onClick={() =>
-            handleSendMessage('What are the trade-offs of DOM virtualization?')
-          }
+          onClick={() => handleSendMessage('What are the trade-offs of DOM virtualization?')}
           className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 whitespace-nowrap transition-colors"
         >
           ⚖️ Virtualization Trade-offs

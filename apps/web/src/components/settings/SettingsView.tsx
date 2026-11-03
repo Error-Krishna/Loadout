@@ -18,12 +18,14 @@ export default function SettingsView() {
 
   useEffect(() => {
     let isSubscribed = true;
-    loadSettings().then((saved) => {
-      if (!isSubscribed) return;
-      setWorkerLimit(saved.workerLimit);
-      setDomCap(saved.domCap);
-      setMemoryWarningMb(saved.memoryWarningMb);
-    }).catch(() => {});
+    loadSettings()
+      .then((saved) => {
+        if (!isSubscribed) return;
+        setWorkerLimit(saved.workerLimit);
+        setDomCap(saved.domCap);
+        setMemoryWarningMb(saved.memoryWarningMb);
+      })
+      .catch(() => {});
 
     return () => {
       isSubscribed = false;
@@ -203,7 +205,8 @@ export default function SettingsView() {
             Workbench Data Portability
           </h3>
           <p className="text-xs text-slate-400 mt-0.5">
-            Export or restore your benchmark history, experiment dossiers, and workbench settings as a portable JSON bundle.
+            Export or restore your benchmark history, experiment dossiers, and workbench settings as
+            a portable JSON bundle.
           </p>
         </div>
 

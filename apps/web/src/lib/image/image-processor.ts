@@ -38,7 +38,13 @@ export async function detectSupportedImageFormats(): Promise<SupportedImageForma
  * Safely revokes any blob URLs associated with a transform result to prevent memory leaks.
  */
 export function revokeImageTransformResult(res: ImageTransformResult | null): void {
-  if (res && res.dataUrl && res.dataUrl.startsWith('blob:') && typeof URL !== 'undefined' && URL.revokeObjectURL) {
+  if (
+    res &&
+    res.dataUrl &&
+    res.dataUrl.startsWith('blob:') &&
+    typeof URL !== 'undefined' &&
+    URL.revokeObjectURL
+  ) {
     try {
       URL.revokeObjectURL(res.dataUrl);
     } catch {

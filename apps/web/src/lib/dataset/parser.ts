@@ -1,9 +1,5 @@
 import type { LoadedDataset } from '../../types/dataset';
-import {
-  parseCsvRecords,
-  parseNdjsonRecords,
-  parseJsonArrayRecords,
-} from './stream-parser';
+import { parseCsvRecords, parseNdjsonRecords, parseJsonArrayRecords } from './stream-parser';
 
 export function parseDatasetRows(
   dataset: LoadedDataset,

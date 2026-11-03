@@ -9,11 +9,7 @@
  * - Provides full prompt context inspection for transparent user verification.
  */
 
-import type {
-  WorkbenchAIContext,
-  SanitizedAIContext,
-  AIMode,
-} from '../../types/ai.ts';
+import type { WorkbenchAIContext, SanitizedAIContext, AIMode } from '../../types/ai.ts';
 
 export class PrivacyGateway {
   private mode: AIMode = 'offline';

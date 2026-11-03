@@ -182,7 +182,10 @@ class IndexedDbAdapter implements StorageAdapter {
           // For settings store, ensure keyPath 'key' is present
           let record: unknown = value;
           if (storeName === 'settings') {
-            record = { key, ...(typeof value === 'object' && value !== null ? value : { val: value }) };
+            record = {
+              key,
+              ...(typeof value === 'object' && value !== null ? value : { val: value }),
+            };
           } else if (typeof record === 'object' && record !== null && !('id' in record)) {
             record = { id: key, ...record };
           }
@@ -209,7 +212,12 @@ class IndexedDbAdapter implements StorageAdapter {
               resolve(undefined);
               return;
             }
-            if (storeName === 'settings' && typeof res === 'object' && res !== null && 'key' in res) {
+            if (
+              storeName === 'settings' &&
+              typeof res === 'object' &&
+              res !== null &&
+              'key' in res
+            ) {
               // eslint-disable-next-line @typescript-eslint/no-unused-vars
               const { key: _, ...data } = res as Record<string, unknown>;
               resolve(data as T);
@@ -217,7 +225,8 @@ class IndexedDbAdapter implements StorageAdapter {
               resolve(res as T);
             }
           };
-          req.onerror = () => reject(req.error ?? new Error(`Failed to get item from ${storeName}`));
+          req.onerror = () =>
+            reject(req.error ?? new Error(`Failed to get item from ${storeName}`));
         }),
       (fallback) => fallback.get(storeName, key),
     );

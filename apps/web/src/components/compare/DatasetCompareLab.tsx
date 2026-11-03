@@ -136,10 +136,16 @@ export default function DatasetCompareLab({
       saveBenchmarkResult(record).catch(() => {});
       const baselineDom = record.baseline.domNodeCount.value;
       const candidateDom = record.candidate.domNodeCount.value;
-      const domRed = Math.max(0, Math.min(100, Math.round((1 - candidateDom / Math.max(1, baselineDom)) * 1000) / 10));
+      const domRed = Math.max(
+        0,
+        Math.min(100, Math.round((1 - candidateDom / Math.max(1, baselineDom)) * 1000) / 10),
+      );
       const baselineTime = Math.max(0.01, record.baseline.distribution.medianMs);
       const candidateTime = record.candidate.distribution.medianMs;
-      const timeRed = Math.max(0, Math.min(100, Math.round((1 - candidateTime / baselineTime) * 1000) / 10));
+      const timeRed = Math.max(
+        0,
+        Math.min(100, Math.round((1 - candidateTime / baselineTime) * 1000) / 10),
+      );
 
       const generatedReport: ExperimentReport = {
         id: `rep_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
@@ -156,7 +162,9 @@ export default function DatasetCompareLab({
         baselineMetrics: {
           domNodes: baselineDom,
           renderTimeMs: Math.round(baselineTime),
-          memoryEstimateMb: Math.round(((record.baseline.estimatedMemoryBytes?.value ?? 0) / (1024 * 1024)) * 10) / 10,
+          memoryEstimateMb:
+            Math.round(((record.baseline.estimatedMemoryBytes?.value ?? 0) / (1024 * 1024)) * 10) /
+            10,
         },
         candidateMetrics: {
           domNodes: candidateDom,

@@ -1,9 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import type {
-  ImageWorkload,
-  ImageTransformResult,
-  SupportedImageFormats,
-} from '../../types/image';
+import type { ImageWorkload, ImageTransformResult, SupportedImageFormats } from '../../types/image';
 import {
   createSampleImageWorkloads,
   transformImageClient,
