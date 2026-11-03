@@ -3,7 +3,49 @@ import type {
   ImageTransformOptions,
   ImageTransformResult,
   ResponsiveSource,
-} from '../../types/image';
+  SupportedImageFormats,
+} from '../../types/image.ts';
+
+/**
+ * Detects browser canvas encoder support for modern formats (WebP, AVIF, JPEG).
+ */
+export async function detectSupportedImageFormats(): Promise<SupportedImageFormats> {
+  if (typeof document === 'undefined') {
+    return { webp: true, avif: false, jpeg: true };
+  }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 1;
+  canvas.height = 1;
+
+  const checkMime = (mime: string): boolean => {
+    try {
+      const data = canvas.toDataURL(mime);
+      return data.startsWith(`data:${mime}`);
+    } catch {
+      return false;
+    }
+  };
+
+  return {
+    webp: checkMime('image/webp'),
+    avif: checkMime('image/avif'),
+    jpeg: checkMime('image/jpeg'),
+  };
+}
+
+/**
+ * Safely revokes any blob URLs associated with a transform result to prevent memory leaks.
+ */
+export function revokeImageTransformResult(res: ImageTransformResult | null): void {
+  if (res && res.dataUrl && res.dataUrl.startsWith('blob:') && typeof URL !== 'undefined' && URL.revokeObjectURL) {
+    try {
+      URL.revokeObjectURL(res.dataUrl);
+    } catch {
+      // Ignored
+    }
+  }
+}
 
 export function createSampleImageWorkloads(): ImageWorkload[] {
   // High-res gradient image data URL
@@ -69,10 +111,10 @@ export async function transformImageClient(
   options: ImageTransformOptions,
 ): Promise<ImageTransformResult> {
   const canvas = document.createElement('canvas');
-  const targetWidth = options.maxWidth
-    ? Math.min(img.naturalWidth || img.width, options.maxWidth)
-    : img.naturalWidth || img.width;
-  const aspectRatio = (img.naturalHeight || img.height) / (img.naturalWidth || img.width || 1);
+  const naturalWidth = img.naturalWidth || img.width || 800;
+  const naturalHeight = img.naturalHeight || img.height || 600;
+  const targetWidth = options.maxWidth ? Math.min(naturalWidth, options.maxWidth) : naturalWidth;
+  const aspectRatio = naturalHeight / (naturalWidth || 1);
   const targetHeight = Math.round(targetWidth * aspectRatio);
 
   canvas.width = Math.max(1, targetWidth);
@@ -83,13 +125,38 @@ export async function transformImageClient(
     ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
   }
 
-  const mimeType = options.format === 'webp' ? 'image/webp' : 'image/jpeg';
+  const mimeType =
+    options.format === 'avif'
+      ? 'image/avif'
+      : options.format === 'webp'
+        ? 'image/webp'
+        : 'image/jpeg';
+
+  const decodeMode = options.decodeMode ?? 'offscreen';
 
   return new Promise((resolve) => {
+    // In headless environments (such as JSDOM without native canvas bindings),
+    // getContext('2d') returns null or toBlob hangs without invoking callback.
+    if (!ctx || typeof canvas.toBlob !== 'function') {
+      resolve({
+        format: options.format,
+        blob: new Blob([]),
+        dataUrl: img.src,
+        sizeBytes: Math.round(1024 * 1024 * options.quality * 0.4),
+        width: targetWidth,
+        height: targetHeight,
+        compressionRatio: 2.5,
+        decodeTimeMs: 4.2,
+        decodeMode,
+        isEstimatedFallback: true,
+      });
+      return;
+    }
+
     canvas.toBlob(
       async (blob) => {
         if (!blob) {
-          // Fallback dummy result if toBlob fails in simulated runner
+          // Fallback if browser does not support the requested format
           resolve({
             format: options.format,
             blob: new Blob([]),
@@ -99,6 +166,8 @@ export async function transformImageClient(
             height: targetHeight,
             compressionRatio: 2.5,
             decodeTimeMs: 4.2,
+            decodeMode,
+            isEstimatedFallback: true,
           });
           return;
         }
@@ -107,10 +176,20 @@ export async function transformImageClient(
         let decodeTime = 2.5;
 
         try {
-          if (typeof createImageBitmap === 'function') {
+          if (decodeMode === 'offscreen' && typeof createImageBitmap === 'function') {
             const bmp = await createImageBitmap(blob);
             decodeTime = Number((performance.now() - startDecode).toFixed(2));
             bmp.close();
+          } else if (typeof Image !== 'undefined') {
+            const testImg = new Image();
+            testImg.src = URL.createObjectURL(blob);
+            if (typeof testImg.decode === 'function') {
+              await testImg.decode();
+              decodeTime = Number((performance.now() - startDecode).toFixed(2));
+            } else {
+              decodeTime = Number((performance.now() - startDecode).toFixed(2));
+            }
+            URL.revokeObjectURL(testImg.src);
           }
         } catch {
           decodeTime = 3.0;
@@ -124,8 +203,9 @@ export async function transformImageClient(
           sizeBytes: blob.size || Math.round(1024 * 1024 * options.quality * 0.35),
           width: targetWidth,
           height: targetHeight,
-          compressionRatio: 1, // Will be computed relative to workload original
+          compressionRatio: 1,
           decodeTimeMs: decodeTime,
+          decodeMode,
         });
       },
       mimeType,
@@ -136,7 +216,7 @@ export async function transformImageClient(
 
 export async function generateResponsiveVariants(
   img: HTMLImageElement,
-  format: 'webp' | 'jpeg',
+  format: 'webp' | 'jpeg' | 'avif',
   quality: number,
 ): Promise<ResponsiveSource[]> {
   const widths = [360, 720, 1080];

@@ -16,6 +16,7 @@ import WorkloadsView from '../workloads/WorkloadsView';
 import TechniqueLibraryView from '../library/TechniqueLibraryView';
 import ReportsManagerView from '../report/ReportsManagerView';
 import SettingsView from '../settings/SettingsView';
+import AICopilotDrawer from '../ai/AICopilotDrawer';
 
 const STEPS: { id: AnalysisStep; label: string; number: string }[] = [
   { id: 'input', label: 'Input', number: '01' },
@@ -49,20 +50,23 @@ export default function AppShell() {
   const [dataset, setDataset] = useState<LoadedDataset | null>(null);
   const [config, setConfig] = useState<AnalysisConfiguration>(DEFAULT_CONFIG);
   const [comparisonRecord, setComparisonRecord] = useState<BenchmarkComparisonRecord | null>(null);
+  const [isCopilotOpen, setIsCopilotOpen] = useState<boolean>(false);
 
   // Restore session from local IndexedDB on mount (Phase 3)
   useEffect(() => {
     let isMounted = true;
-    loadSession().then((saved) => {
-      if (!isMounted || !saved) return;
-      setActiveView(saved.activeView);
-      setActiveStep(saved.activeStep);
-      if (saved.config) setConfig(saved.config);
-      if (saved.activeBenchmarkRecord) setComparisonRecord(saved.activeBenchmarkRecord);
-      if (saved.persistedDataset) {
-        setDataset(saved.persistedDataset);
-      }
-    }).catch(() => {});
+    loadSession()
+      .then((saved) => {
+        if (!isMounted || !saved) return;
+        setActiveView(saved.activeView);
+        setActiveStep(saved.activeStep);
+        if (saved.config) setConfig(saved.config);
+        if (saved.activeBenchmarkRecord) setComparisonRecord(saved.activeBenchmarkRecord);
+        if (saved.persistedDataset) {
+          setDataset(saved.persistedDataset);
+        }
+      })
+      .catch(() => {});
 
     return () => {
       isMounted = false;
@@ -152,12 +156,21 @@ export default function AppShell() {
           </nav>
         </div>
 
-        {/* Local Processing Privacy Badge */}
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-mono bg-emerald-950/60 text-emerald-400 border border-emerald-800/50">
+        {/* Local Processing Privacy Badge & AI Copilot Toggle */}
+        <div className="flex items-center gap-3 shrink-0">
+          <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-mono bg-emerald-950/60 text-emerald-400 border border-emerald-800/50">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
             Local-First Engine
           </span>
+
+          <button
+            type="button"
+            onClick={() => setIsCopilotOpen(!isCopilotOpen)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-mono bg-cyan-950 hover:bg-cyan-900 text-cyan-300 border border-cyan-800 transition-colors shadow-sm cursor-pointer"
+          >
+            <span>✨</span>
+            <span className="font-semibold">AI Copilot</span>
+          </button>
         </div>
       </header>
 
@@ -283,6 +296,32 @@ export default function AppShell() {
           <span>Zero network transmission • In-memory client sandbox</span>
         </div>
       </footer>
+
+      {/* 5. AI Performance Engineering Copilot Drawer (Phase 6-10) */}
+      <AICopilotDrawer
+        isOpen={isCopilotOpen}
+        onClose={() => setIsCopilotOpen(false)}
+        context={{
+          activeView,
+          activeStep,
+          config,
+          datasetSummary: dataset
+            ? {
+                name: dataset.name,
+                format: dataset.format,
+                rowCount: dataset.rowCountEstimate ?? 0,
+                columnCount: 0,
+                columns: [],
+              }
+            : undefined,
+          activeBenchmark: comparisonRecord,
+        }}
+        onNavigateToView={(view) => setActiveView(view as WorkbenchView)}
+        onNavigateToStep={(step) => {
+          setActiveView('new-analysis');
+          setActiveStep(step as AnalysisStep);
+        }}
+      />
     </div>
   );
 }

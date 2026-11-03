@@ -53,6 +53,17 @@ export default function StreamLabView() {
           <p className="text-xs text-slate-400 font-mono">
             Simulate 10 to 1,000 events/sec. Test batching, visual coalescing, and buffer limits.
           </p>
+          <div className="flex items-center gap-2 mt-2 text-[10px] font-mono text-slate-400">
+            <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+              Provenance: In-Memory Simulated Wire
+            </span>
+            <span className="px-1.5 py-0.5 rounded bg-emerald-950/60 text-emerald-400 border border-emerald-800/60">
+              Zero Network Egress
+            </span>
+            <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+              Timer: performance.now()
+            </span>
+          </div>
         </div>
 
         {/* Engine Actions */}

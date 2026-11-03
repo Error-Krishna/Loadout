@@ -13,9 +13,10 @@ export interface ImageWorkload {
 }
 
 export interface ImageTransformOptions {
-  format: 'webp' | 'jpeg';
+  format: 'webp' | 'jpeg' | 'avif';
   quality: number; // 0.1 to 1.0
   maxWidth?: number;
+  decodeMode?: 'offscreen' | 'main-thread';
 }
 
 export interface ImageTransformResult {
@@ -27,6 +28,8 @@ export interface ImageTransformResult {
   height: number;
   compressionRatio: number;
   decodeTimeMs: number;
+  decodeMode: 'offscreen' | 'main-thread';
+  isEstimatedFallback?: boolean;
 }
 
 export interface ResponsiveSource {
@@ -35,4 +38,10 @@ export interface ResponsiveSource {
   height: number;
   sizeBytes: number;
   dataUrl: string;
+}
+
+export interface SupportedImageFormats {
+  webp: boolean;
+  avif: boolean;
+  jpeg: boolean;
 }

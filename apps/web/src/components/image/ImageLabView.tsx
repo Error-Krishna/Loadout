@@ -1,9 +1,15 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import type { ImageWorkload, ImageTransformResult } from '../../types/image';
+import type {
+  ImageWorkload,
+  ImageTransformResult,
+  SupportedImageFormats,
+} from '../../types/image';
 import {
   createSampleImageWorkloads,
   transformImageClient,
   generatePictureSnippet,
+  detectSupportedImageFormats,
+  revokeImageTransformResult,
 } from '../../lib/image/image-processor';
 
 export default function ImageLabView() {
@@ -11,16 +17,55 @@ export default function ImageLabView() {
   const [selectedWorkload, setSelectedWorkload] = useState<ImageWorkload>(
     () => sampleWorkloads[0]!,
   );
-  const [targetFormat, setTargetFormat] = useState<'webp' | 'jpeg'>('webp');
+  const [targetFormat, setTargetFormat] = useState<'webp' | 'jpeg' | 'avif'>('webp');
   const [quality, setQuality] = useState<number>(0.8);
   const [maxWidth, setMaxWidth] = useState<number>(1200);
   const [useOffscreenDecode, setUseOffscreenDecode] = useState<boolean>(true);
   const [copiedSnippet, setCopiedSnippet] = useState<boolean>(false);
+  const [supportedFormats, setSupportedFormats] = useState<SupportedImageFormats>({
+    webp: true,
+    avif: false,
+    jpeg: true,
+  });
 
   const [transformResult, setTransformResult] = useState<ImageTransformResult | null>(null);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
 
   const hiddenImgRef = useRef<HTMLImageElement | null>(null);
+  const prevResultRef = useRef<ImageTransformResult | null>(null);
+
+  // Detect browser encoder format capabilities
+  useEffect(() => {
+    let isSubscribed = true;
+    detectSupportedImageFormats()
+      .then((formats) => {
+        if (isSubscribed) {
+          setSupportedFormats(formats);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      isSubscribed = false;
+    };
+  }, []);
+
+  // Revoke previous blob URLs to prevent memory leakage
+  useEffect(() => {
+    if (prevResultRef.current && prevResultRef.current !== transformResult) {
+      revokeImageTransformResult(prevResultRef.current);
+    }
+    prevResultRef.current = transformResult;
+  }, [transformResult]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (prevResultRef.current) {
+        revokeImageTransformResult(prevResultRef.current);
+      }
+    };
+  }, []);
 
   // Run real client-side canvas transformation
   useEffect(() => {
@@ -35,6 +80,7 @@ export default function ImageLabView() {
           format: targetFormat,
           quality,
           maxWidth,
+          decodeMode: useOffscreenDecode ? 'offscreen' : 'main-thread',
         });
 
         if (!isCancelled) {
@@ -60,7 +106,7 @@ export default function ImageLabView() {
     return () => {
       isCancelled = true;
     };
-  }, [selectedWorkload, targetFormat, quality, maxWidth]);
+  }, [selectedWorkload, targetFormat, quality, maxWidth, useOffscreenDecode]);
 
   const originalKb = (selectedWorkload.originalBytes / 1024).toFixed(1);
   const transformedKb = transformResult ? (transformResult.sizeBytes / 1024).toFixed(1) : '...';
@@ -119,6 +165,17 @@ export default function ImageLabView() {
     navigator.clipboard.writeText(codeSnippet);
     setCopiedSnippet(true);
     setTimeout(() => setCopiedSnippet(false), 2000);
+  }
+
+  function handleDownloadOptimized() {
+    if (!transformResult?.blob) return;
+    const url = URL.createObjectURL(transformResult.blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const baseName = selectedWorkload.name.replace(/\.[^/.]+$/, '');
+    a.download = `${baseName}-optimized.${targetFormat}`;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   return (
@@ -188,6 +245,25 @@ export default function ImageLabView() {
               }`}
             >
               WebP (Modern)
+            </button>
+            <button
+              type="button"
+              onClick={() => supportedFormats.avif && setTargetFormat('avif')}
+              disabled={!supportedFormats.avif}
+              title={
+                supportedFormats.avif
+                  ? 'Next-gen AVIF encoding'
+                  : 'AVIF encoding not supported by current browser canvas'
+              }
+              className={`flex-1 py-1 text-center rounded transition-colors ${
+                targetFormat === 'avif'
+                  ? 'bg-purple-950 text-purple-300 border border-purple-800 font-bold'
+                  : supportedFormats.avif
+                    ? 'text-slate-400 hover:text-slate-200'
+                    : 'text-slate-600 cursor-not-allowed line-through'
+              }`}
+            >
+              AVIF {supportedFormats.avif ? '' : '(N/A)'}
             </button>
             <button
               type="button"
@@ -310,6 +386,15 @@ export default function ImageLabView() {
               <span className="text-xs font-mono px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800 font-bold">
                 {transformedKb} KB (-{savingsPct}%)
               </span>
+              {transformResult?.blob && (
+                <button
+                  type="button"
+                  onClick={handleDownloadOptimized}
+                  className="px-2 py-0.5 text-xs font-mono rounded bg-cyan-950 hover:bg-cyan-900 text-cyan-300 border border-cyan-800 transition-colors"
+                >
+                  Download
+                </button>
+              )}
             </div>
           </div>
 
