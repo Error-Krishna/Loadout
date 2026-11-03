@@ -115,6 +115,7 @@ LOADOUT is built on a strict **local-first, privacy-preserving foundation**: use
 ```
 
 ### 1. Data Ingestion & Stream Parsing
+
 - **Streaming RFC 4180 CSV Engine**: Handles multi-line quoted fields, escaped quotes (`""`), and CRLF/LF line endings.
 - **NDJSON Stream Parser**: Fault-tolerant line-by-line parsing that recovers from malformed individual rows without terminating ingestion.
 - **Chunked Processing & Backpressure**: Streams in 64 KB binary chunks with microtask backpressure yielding (`setTimeout(0)`) to preserve UI responsiveness on large files.
@@ -122,6 +123,7 @@ LOADOUT is built on a strict **local-first, privacy-preserving foundation**: use
 - **Synthetic Benchmark Presets**: Includes deterministic generators (`events-10k.csv`, `inventory-50k.csv`, `logs-100k.json`) for stress-testing DOM virtualization and search algorithms immediately without external files.
 
 ### 2. Canonical Benchmark Engine & Provenance
+
 - **Metric Provenance**: Every metric emitted by the engine conforms to canonical Zod schemas, tagged with measurement methodology and unit descriptions.
 - **Execution Runner (`runner.ts`)**: Decoupled from React, executing isolated workload adapters through a deterministic lifecycle:
   1. Validate benchmark policy and inputs.
@@ -140,6 +142,7 @@ LOADOUT is built on a strict **local-first, privacy-preserving foundation**: use
   - Baseline vs. candidate uncertainty evaluation via the Mann-Whitney U rank-sum test with normal approximation, yielding definitive verdicts: `improved`, `regressed`, `inconclusive`, or `no-difference`.
 
 ### 3. Semantic Correctness Verification Gate
+
 - **Validation Modes**:
   - `exact`: Full record and property equality across the complete dataset.
   - `canonical`: Structural normalization with key-order independence.
@@ -154,6 +157,7 @@ LOADOUT is built on a strict **local-first, privacy-preserving foundation**: use
   - Structured divergence reporting detailing exact mismatch indices, expected values, and actual values.
 
 ### 4. Workload Laboratories
+
 - **Dataset Lab**: Comprehensive 6-step workbench pipeline: Intake $\rightarrow$ Schema Profiling $\rightarrow$ Configuration $\rightarrow$ Controlled Benchmark $\rightarrow$ Correctness Gate $\rightarrow$ Actionable Implementation Guide with live code diffs.
   - Baseline: Naive DOM rendering and main-thread linear search.
   - Candidate: Virtualized row rendering (`@tanstack/react-virtual`) and non-blocking Web Worker off-thread search.
@@ -168,6 +172,7 @@ LOADOUT is built on a strict **local-first, privacy-preserving foundation**: use
   - Explicit provenance labeling: `Simulated In-Memory Clock • Zero Network Egress`.
 
 ### 5. Privacy Gateway & AI Copilot
+
 - **Privacy Boundary**: Sits between the workbench state and all AI providers. It strips raw dataset rows, columns, and private values, constructing a sanitized payload containing only structural metadata (row count, column names, data types) and verified benchmark statistics.
 - **Curated RAG Knowledge Base**: High-speed in-memory lexical search engine loaded with verified engineering papers and references:
   - DOM virtualization and layout thrashing avoidance.
@@ -182,6 +187,7 @@ LOADOUT is built on a strict **local-first, privacy-preserving foundation**: use
 - **Interactive UI**: Sliding drawer accessible across the entire application with quick-prompt shortcuts, expandable citation cards, and an inspectable payload view disclosing the exact sanitized data sent to the AI.
 
 ### 6. Local Persistence & State Engine
+
 - **Native IndexedDB Adapter (`db.ts`)**: Promisified, transaction-safe storage engine with zero external dependencies.
 - **Headless & SSR Fallback**: Seamless, transparent in-memory storage fallback for Node.js test runners, headless environments, or private browsing modes.
 - **Object Stores**:
@@ -297,18 +303,18 @@ pnpm build
 
 ## Technology Stack
 
-| Domain | Technology | Purpose |
-|---|---|---|
-| **Frontend Framework** | React 19, TypeScript (Strict) | Component architecture and state lifecycle |
-| **Build Tool** | Vite 7 | Lightning-fast HMR and optimized production bundles |
-| **Styling** | Tailwind CSS v4, Lucide React | Modern, responsive technical workbench interface |
-| **Routing** | React Router v7 | Deep-linking, navigation history, and breadcrumbs |
-| **DOM Virtualization** | TanStack Virtual (`@tanstack/react-virtual`) | Efficient 60fps rendering of 100k+ row datasets |
-| **Concurrency** | Dedicated Web Workers | Off-thread regex filtering and data processing |
-| **Data Validation** | Zod v4 | Schema parity, benchmark contracts, metric validation |
-| **Local Persistence** | Native IndexedDB API | Privacy-preserving local database with memory fallback |
-| **Testing** | Vitest 3, React Testing Library, jsdom | Fast unit, integration, and E2E pipeline verification |
-| **AI Integration** | Lexical BM25 RAG + BYOK Providers | Grounded performance interpretation with zero data egress |
+| Domain                 | Technology                                   | Purpose                                                   |
+| ---------------------- | -------------------------------------------- | --------------------------------------------------------- |
+| **Frontend Framework** | React 19, TypeScript (Strict)                | Component architecture and state lifecycle                |
+| **Build Tool**         | Vite 7                                       | Lightning-fast HMR and optimized production bundles       |
+| **Styling**            | Tailwind CSS v4, Lucide React                | Modern, responsive technical workbench interface          |
+| **Routing**            | React Router v7                              | Deep-linking, navigation history, and breadcrumbs         |
+| **DOM Virtualization** | TanStack Virtual (`@tanstack/react-virtual`) | Efficient 60fps rendering of 100k+ row datasets           |
+| **Concurrency**        | Dedicated Web Workers                        | Off-thread regex filtering and data processing            |
+| **Data Validation**    | Zod v4                                       | Schema parity, benchmark contracts, metric validation     |
+| **Local Persistence**  | Native IndexedDB API                         | Privacy-preserving local database with memory fallback    |
+| **Testing**            | Vitest 3, React Testing Library, jsdom       | Fast unit, integration, and E2E pipeline verification     |
+| **AI Integration**     | Lexical BM25 RAG + BYOK Providers            | Grounded performance interpretation with zero data egress |
 
 ---
 
