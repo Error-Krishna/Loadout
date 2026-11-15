@@ -8,6 +8,7 @@
 import type { WorkbenchView, AnalysisStep } from './navigation.ts';
 import type { AnalysisConfiguration, ExperimentReport, LoadedDataset } from './dataset.ts';
 import type { BenchmarkComparisonRecord } from './benchmark.ts';
+import { z } from 'zod';
 
 export interface WorkbenchSession {
   id: string; // e.g. 'active_workbench_session'
@@ -25,7 +26,6 @@ export interface WorkbenchSettings {
   memoryWarningMb: number;
   telemetryOptIn: boolean;
   aiMode: 'disabled' | 'local' | 'cloud';
-  aiApiKey?: string;
   updatedAt?: string;
 }
 
@@ -46,6 +46,25 @@ export interface ExportBundle {
   reports: ExperimentReport[];
   settings: WorkbenchSettings;
 }
+
+export const exportBundleSchema = z.object({
+  version: z.literal(1, { message: 'Unsupported bundle version. Only version 1 is supported.' }),
+  exportedAt: z.string(),
+  platform: z.string().optional(),
+  sessions: z.array(z.record(z.string(), z.unknown())).optional().default([]),
+  benchmarkResults: z.array(z.record(z.string(), z.unknown())).optional().default([]),
+  reports: z.array(z.record(z.string(), z.unknown())).optional().default([]),
+  settings: z
+    .object({
+      workerLimit: z.number().int().min(1).default(4),
+      domCap: z.number().int().min(500).default(5000),
+      memoryWarningMb: z.number().int().min(10).default(50),
+      telemetryOptIn: z.boolean().default(false),
+      aiMode: z.enum(['disabled', 'local', 'cloud']).default('disabled'),
+      updatedAt: z.string().optional(),
+    })
+    .optional(),
+});
 
 export interface ImportSummary {
   sessionsImported: number;

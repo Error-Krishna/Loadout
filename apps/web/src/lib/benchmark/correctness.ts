@@ -815,6 +815,43 @@ function compareValues(
 }
 
 /**
+ * Helper to recursively determine if two values are semantically equivalent within numeric tolerance.
+ */
+function areValuesEquivalentWithinTolerance(a: unknown, b: unknown, tol: number): boolean {
+  if (Object.is(a, b)) return true;
+  if (typeof a === 'number' && typeof b === 'number') {
+    return Math.abs(a - b) <= tol;
+  }
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+      if (!areValuesEquivalentWithinTolerance(a[i], b[i], tol)) return false;
+    }
+    return true;
+  }
+  if (
+    typeof a === 'object' &&
+    a !== null &&
+    typeof b === 'object' &&
+    b !== null &&
+    !Array.isArray(a) &&
+    !Array.isArray(b)
+  ) {
+    const recA = a as Record<string, unknown>;
+    const recB = b as Record<string, unknown>;
+    const keysA = Object.keys(recA);
+    const keysB = Object.keys(recB);
+    if (keysA.length !== keysB.length) return false;
+    for (const k of keysA) {
+      if (!Object.prototype.hasOwnProperty.call(recB, k)) return false;
+      if (!areValuesEquivalentWithinTolerance(recA[k], recB[k], tol)) return false;
+    }
+    return true;
+  }
+  return false;
+}
+
+/**
  * Compares two arrays as unordered multisets using deterministic element hashes.
  */
 function compareMultisetArrays(
@@ -857,7 +894,90 @@ function compareMultisetArrays(
     if (!hashToSample.has(h)) hashToSample.set(h, item);
   }
 
-  // Compare multiset frequencies
+  // Check if multiset frequencies balance exactly
+  let hasMismatches = false;
+  const allHashes = new Set([...expCounts.keys(), ...actCounts.keys()]);
+  for (const h of allHashes) {
+    if ((expCounts.get(h) ?? 0) !== (actCounts.get(h) ?? 0)) {
+      hasMismatches = true;
+      break;
+    }
+  }
+
+  // If tolerant numeric comparison is enabled and hashes diverged, attempt tolerant pairing
+  const hasFloatTolerance =
+    ctx.options.floatTolerance !== undefined && ctx.options.floatTolerance > 0;
+  if (hasMismatches && hasFloatTolerance) {
+    const unmatchedExp: unknown[] = [];
+    const unmatchedAct: unknown[] = [];
+
+    for (const h of allHashes) {
+      const e = expCounts.get(h) ?? 0;
+      const a = actCounts.get(h) ?? 0;
+      const common = Math.min(e, a);
+      const diffE = e - common;
+      const diffA = a - common;
+      const sample = hashToSample.get(h);
+      for (let k = 0; k < diffE; k++) unmatchedExp.push(sample);
+      for (let k = 0; k < diffA; k++) unmatchedAct.push(sample);
+    }
+
+    const matchedActIndices = new Set<number>();
+    const stillUnmatchedExp: unknown[] = [];
+
+    for (const expItem of unmatchedExp) {
+      let foundIndex = -1;
+      for (let aIdx = 0; aIdx < unmatchedAct.length; aIdx++) {
+        if (matchedActIndices.has(aIdx)) continue;
+        if (
+          areValuesEquivalentWithinTolerance(
+            expItem,
+            unmatchedAct[aIdx],
+            ctx.options.floatTolerance!,
+          )
+        ) {
+          foundIndex = aIdx;
+          break;
+        }
+      }
+
+      if (foundIndex !== -1) {
+        matchedActIndices.add(foundIndex);
+      } else {
+        stillUnmatchedExp.push(expItem);
+      }
+    }
+
+    const stillUnmatchedAct = unmatchedAct.filter((_, idx) => !matchedActIndices.has(idx));
+
+    for (const expItem of stillUnmatchedExp) {
+      if (ctx.divergences.length >= ctx.maxDivergences) break;
+      addDivergence(
+        ctx,
+        'value',
+        recordIndex,
+        path,
+        `Expected ${formatValueBrief(expItem, ctx.maxValLen)}`,
+        'Missing in multiset',
+      );
+    }
+
+    for (const actItem of stillUnmatchedAct) {
+      if (ctx.divergences.length >= ctx.maxDivergences) break;
+      addDivergence(
+        ctx,
+        'value',
+        recordIndex,
+        path,
+        '0 occurrences',
+        `Unexpected ${formatValueBrief(actItem, ctx.maxValLen)} in multiset`,
+      );
+    }
+
+    return;
+  }
+
+  // Compare multiset frequencies directly
   for (const [hash, expCount] of expCounts.entries()) {
     if (ctx.divergences.length >= ctx.maxDivergences) break;
     const actCount = actCounts.get(hash) ?? 0;
@@ -1045,7 +1165,17 @@ export function verifyCorrectness(
   }
 
   // Determine Sample Hash Parity
-  const sampleHashParity = baselineHash !== undefined && baselineHash === candidateHash;
+  let sampleHashParity = baselineHash !== undefined && baselineHash === candidateHash;
+  if (
+    !sampleHashParity &&
+    ctx.options.floatTolerance !== undefined &&
+    ctx.options.floatTolerance > 0 &&
+    ctx.divergences.length === 0
+  ) {
+    // Tolerant comparison passed all semantic checks; align sampleHashParity to avoid contradictory false failures
+    sampleHashParity = true;
+    candidateHash = baselineHash;
+  }
 
   // Warning when max divergences limit is reached
   if (ctx.divergences.length >= maxDivergences) {

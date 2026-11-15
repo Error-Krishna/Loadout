@@ -121,45 +121,110 @@ export const CURATED_KNOWLEDGE_CHUNKS: KnowledgeDocChunk[] = [
 ];
 
 /**
- * In-browser keyword / BM25 style retriever for the curated knowledge base.
+ * Tokenizes text into lowercase normalized terms.
+ */
+function tokenize(text: string): string[] {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, ' ')
+    .split(/\s+/)
+    .filter((t) => t.length >= 2);
+}
+
+interface PreprocessedDocument {
+  chunk: KnowledgeDocChunk;
+  tokens: string[];
+  tokenCounts: Map<string, number>;
+  length: number;
+}
+
+// Pre-calculate document lengths and token frequencies for BM25
+const PREPROCESSED_DOCS: PreprocessedDocument[] = CURATED_KNOWLEDGE_CHUNKS.map((chunk) => {
+  // Title and tags are given additional term frequency weight (2x)
+  const titleTokens = tokenize(chunk.title);
+  const tagTokens = tokenize(chunk.tags.join(' '));
+  const sectionTokens = tokenize(chunk.section);
+  const contentTokens = tokenize(chunk.content);
+
+  const weightedTokens: string[] = [
+    ...titleTokens,
+    ...titleTokens,
+    ...tagTokens,
+    ...tagTokens,
+    ...sectionTokens,
+    ...contentTokens,
+  ];
+
+  const tokenCounts = new Map<string, number>();
+  for (const t of weightedTokens) {
+    tokenCounts.set(t, (tokenCounts.get(t) ?? 0) + 1);
+  }
+
+  return {
+    chunk,
+    tokens: weightedTokens,
+    tokenCounts,
+    length: weightedTokens.length,
+  };
+});
+
+const TOTAL_DOCS = PREPROCESSED_DOCS.length;
+const AVG_DOC_LENGTH =
+  TOTAL_DOCS > 0 ? PREPROCESSED_DOCS.reduce((acc, d) => acc + d.length, 0) / TOTAL_DOCS : 1;
+
+/**
+ * Calculates Robertson-Spärck Jones BM25 Inverse Document Frequency (IDF).
+ * IDF(q) = ln( (N - n(q) + 0.5) / (n(q) + 0.5) + 1 )
+ */
+function calculateIdf(term: string): number {
+  let docCount = 0;
+  for (const doc of PREPROCESSED_DOCS) {
+    if (doc.tokenCounts.has(term)) {
+      docCount++;
+    }
+  }
+  if (docCount === 0) return 0;
+  return Math.log((TOTAL_DOCS - docCount + 0.5) / (docCount + 0.5) + 1);
+}
+
+/**
+ * In-browser BM25 lexical retriever for the curated knowledge base.
+ *
+ * Mathematical Parameters:
+ * - k1 = 1.2 (controls term frequency saturation)
+ * - b = 0.75 (controls document length normalization penalty)
  */
 export function queryKnowledgeBase(
   query: string,
   maxResults = 3,
+  options: { k1?: number; b?: number } = {},
 ): { chunk: KnowledgeDocChunk; score: number }[] {
   if (!query || query.trim().length === 0) {
     return [];
   }
 
-  const terms = query
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, ' ')
-    .split(/\s+/)
-    .filter((t) => t.length > 2);
+  const { k1 = 1.2, b = 0.75 } = options;
+  const queryTerms = tokenize(query);
 
-  if (terms.length === 0) {
+  if (queryTerms.length === 0) {
     return [];
   }
 
-  const scored = CURATED_KNOWLEDGE_CHUNKS.map((chunk) => {
+  const scored = PREPROCESSED_DOCS.map((doc) => {
     let score = 0;
-    const titleLower = chunk.title.toLowerCase();
-    const sectionLower = chunk.section.toLowerCase();
-    const contentLower = chunk.content.toLowerCase();
-    const tagsJoined = chunk.tags.join(' ').toLowerCase();
 
-    for (const term of terms) {
-      if (titleLower.includes(term)) score += 8;
-      if (tagsJoined.includes(term)) score += 6;
-      if (sectionLower.includes(term)) score += 4;
-      if (contentLower.includes(term)) {
-        // Count occurrences
-        const matches = contentLower.split(term).length - 1;
-        score += Math.min(matches * 2, 6);
+    for (const term of queryTerms) {
+      const tf = doc.tokenCounts.get(term) ?? 0;
+      if (tf > 0) {
+        const idf = calculateIdf(term);
+        // BM25 term score formula with document length normalization
+        const numerator = tf * (k1 + 1);
+        const denominator = tf + k1 * (1 - b + b * (doc.length / AVG_DOC_LENGTH));
+        score += idf * (numerator / denominator);
       }
     }
 
-    return { chunk, score };
+    return { chunk: doc.chunk, score: Math.round(score * 1000) / 1000 };
   });
 
   return scored
@@ -181,4 +246,15 @@ export function createCitations(
     url: chunk.url,
     excerpt: chunk.content.slice(0, 160) + '...',
   }));
+}
+
+/**
+ * Validates citations against verified knowledge base chunk IDs, filtering out hallucinated references.
+ */
+export function validateCitations(
+  citations: AICitation[],
+  allowedChunkIds?: Set<string>,
+): AICitation[] {
+  const allowed = allowedChunkIds ?? new Set(CURATED_KNOWLEDGE_CHUNKS.map((c) => c.id));
+  return citations.filter((c) => c && c.sourceId && allowed.has(c.sourceId));
 }

@@ -78,10 +78,11 @@ export default function DatasetIntake({ onDatasetLoaded }: DatasetIntakeProps) {
         return;
       }
 
-      // Read a preview string for in-memory dataset representation
+      // Read a preview string for UI snippet display (non-blocking)
       const previewBlob = file.slice(0, Math.min(file.size, 512 * 1024));
       const rawText = await previewBlob.text();
 
+      // Pass the complete dataset with all parsed records to the workbench
       onDatasetLoaded({
         name: file.name,
         sizeBytes: file.size,
@@ -89,6 +90,8 @@ export default function DatasetIntake({ onDatasetLoaded }: DatasetIntakeProps) {
         rawText,
         isSynthetic: false,
         rowCountEstimate: result.totalRows,
+        parsedRows: result.rows,
+        columns: result.columns,
       });
     } catch (err) {
       if (controller.signal.aborted) {

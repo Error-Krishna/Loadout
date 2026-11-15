@@ -1,10 +1,9 @@
 /**
- * LOADOUT Version 2.0 — AI Provider Implementations
+ * LOADOUT Version 2.1 — AI Provider Implementations
  *
  * Provides:
  * 1. OfflineAIProvider: Purely local heuristic performance engineering engine (Zero network egress).
- * 2. OpenAIProvider: Optional cloud integration with sanitized prompt payloads.
- * 3. GeminiProvider: Optional Google Gemini integration with sanitized prompt payloads.
+ * 2. GroqProvider: Free cloud AI integration via backend gateway (/api/ai/completions) with automatic offline fallback.
  */
 
 import type {
@@ -13,7 +12,7 @@ import type {
   AICitation,
   AISuggestedAction,
 } from '../../../types/ai.ts';
-import { queryKnowledgeBase, createCitations } from '../knowledge/index.ts';
+import { queryKnowledgeBase, createCitations, validateCitations } from '../knowledge/index.ts';
 
 export interface AIProvider {
   id: AIProviderType;
@@ -179,26 +178,19 @@ export class OfflineAIProvider implements AIProvider {
 }
 
 /**
- * Optional Cloud AI Provider for OpenAI-compatible endpoints.
- * Operates strictly with sanitized contexts when user provides an API key.
+ * Groq Free Cloud AI Provider via Backend Gateway.
+ * Proxies through /api/ai/completions with automatic fallback to OfflineAIProvider.
+ * Requires zero client credentials.
  */
-export class OpenAIProvider implements AIProvider {
-  id: AIProviderType = 'openai';
-  name = 'OpenAI Compatible Provider (Sanitized Egress)';
+export class GroqProvider implements AIProvider {
+  id: AIProviderType = 'groq';
+  name = 'Groq Cloud Copilot (Free Cloud AI)';
   isLocal = false;
-  private apiKey: string;
   private endpoint: string;
-  private model: string;
   private offlineFallback: OfflineAIProvider;
 
-  constructor(
-    apiKey: string,
-    endpoint = 'https://api.openai.com/v1/chat/completions',
-    model = 'gpt-4o-mini',
-  ) {
-    this.apiKey = apiKey;
+  constructor(endpoint = '/api/ai/completions') {
     this.endpoint = endpoint;
-    this.model = model;
     this.offlineFallback = new OfflineAIProvider();
   }
 
@@ -210,143 +202,64 @@ export class OpenAIProvider implements AIProvider {
     citations?: AICitation[];
     suggestedActions?: AISuggestedAction[];
   }> {
-    if (!this.apiKey) {
-      return this.offlineFallback.generateResponse(userPrompt, context);
-    }
-
     try {
-      const payload = {
-        model: this.model,
-        messages: [
-          {
-            role: 'system',
-            content:
-              'You are the Senior Performance Engineering Copilot for LOADOUT. ' +
-              'You evaluate web performance benchmarks, statistical distributions, and memory trade-offs. ' +
-              'Never hallucinate metrics; cite exact numbers from the provided sanitized benchmark summary.',
-          },
-          {
-            role: 'user',
-            content: `User Question: ${userPrompt}\n\nSanitized Context: ${JSON.stringify(context, null, 2)}`,
-          },
-        ],
-        temperature: 0.2,
-      };
+      const searchResults = queryKnowledgeBase(userPrompt, 3);
+      const localCitations = createCitations(searchResults);
 
       const res = await fetch(this.endpoint, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${this.apiKey}`,
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        throw new Error(`OpenAI request returned status ${res.status}`);
-      }
-
-      const data = await res.json();
-      const content = data.choices?.[0]?.message?.content ?? '';
-      const citations = createCitations(queryKnowledgeBase(userPrompt, 2));
-
-      return {
-        content,
-        citations,
-      };
-    } catch {
-      // Gracefully fall back to local offline provider on network or key errors
-      return this.offlineFallback.generateResponse(userPrompt, context);
-    }
-  }
-}
-
-/**
- * Optional Google Gemini Provider.
- * Operates strictly with sanitized contexts.
- */
-export class GeminiProvider implements AIProvider {
-  id: AIProviderType = 'gemini';
-  name = 'Google Gemini Provider (Sanitized Egress)';
-  isLocal = false;
-  private apiKey: string;
-  private offlineFallback: OfflineAIProvider;
-
-  constructor(apiKey: string) {
-    this.apiKey = apiKey;
-    this.offlineFallback = new OfflineAIProvider();
-  }
-
-  async generateResponse(
-    userPrompt: string,
-    context: SanitizedAIContext,
-  ): Promise<{
-    content: string;
-    citations?: AICitation[];
-    suggestedActions?: AISuggestedAction[];
-  }> {
-    if (!this.apiKey) {
-      return this.offlineFallback.generateResponse(userPrompt, context);
-    }
-
-    try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${this.apiKey}`;
-      const payload = {
-        contents: [
-          {
-            parts: [
-              {
-                text:
-                  `You are LOADOUT's Senior Performance Copilot. Answer based strictly on this verified performance context:\n` +
-                  `Context: ${JSON.stringify(context, null, 2)}\n\nUser Question: ${userPrompt}`,
-              },
-            ],
-          },
-        ],
-      };
-
-      const res = await fetch(url, {
-        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          prompt: userPrompt,
+          context,
+          citations: localCitations,
+        }),
+        signal: AbortSignal.timeout(10000),
       });
 
-      if (!res.ok) {
-        throw new Error(`Gemini API returned status ${res.status}`);
+      if (!res.ok && res.status !== 429) {
+        throw new Error(`AI completion failed with status ${res.status}`);
       }
 
-      const data = await res.json();
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
-      const citations = createCitations(queryKnowledgeBase(userPrompt, 2));
+      const json = await res.json();
+      const allowedChunkIds = new Set(searchResults.map((r) => r.chunk.id));
 
-      return {
-        content: text,
-        citations,
-      };
+      if (json.success && json.data?.content) {
+        const rawCitations = json.data.citations ?? localCitations;
+        return {
+          content: json.data.content,
+          citations: validateCitations(rawCitations, allowedChunkIds),
+          suggestedActions: json.data.suggestedActions,
+        };
+      }
+
+      // If server returned structured fallback or error with data.content
+      if (json.data?.content) {
+        const rawCitations = json.data.citations ?? localCitations;
+        return {
+          content: json.data.content,
+          citations: validateCitations(rawCitations, allowedChunkIds),
+          suggestedActions: json.data.suggestedActions,
+        };
+      }
+
+      return this.offlineFallback.generateResponse(userPrompt, context);
     } catch {
+      // Gracefully fall back to local offline provider on network or proxy errors
       return this.offlineFallback.generateResponse(userPrompt, context);
     }
   }
 }
 
 /**
- * Creates the appropriate AIProvider based on user settings and active mode.
+ * Creates the appropriate AIProvider based on active mode.
  */
 export function createAIProvider(
-  mode: 'offline' | 'cloud-opt-in',
+  mode: 'offline' | 'cloud-opt-in' = 'offline',
   providerType: AIProviderType = 'offline',
-  apiKey?: string,
 ): AIProvider {
-  if (mode === 'offline' || !apiKey) {
-    return new OfflineAIProvider();
-  }
-
-  if (providerType === 'gemini') {
-    return new GeminiProvider(apiKey);
-  }
-
-  if (providerType === 'openai') {
-    return new OpenAIProvider(apiKey);
+  if (mode === 'cloud-opt-in' && providerType === 'groq') {
+    return new GroqProvider();
   }
 
   return new OfflineAIProvider();

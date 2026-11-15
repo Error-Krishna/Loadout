@@ -41,26 +41,44 @@ export function generateSyntheticDataset(preset: SyntheticPreset): LoadedDataset
 
   if (preset.format === 'csv') {
     const isMetrics = preset.id.includes('metrics');
-    const header = isMetrics
-      ? 'id,timestamp,cpu_pct,memory_mb,disk_read_kb,service_name\n'
-      : 'id,timestamp,event_name,user_id,status_code,latency_ms\n';
+    const columns = isMetrics
+      ? ['id', 'timestamp', 'cpu_pct', 'memory_mb', 'disk_read_kb', 'service_name']
+      : ['id', 'timestamp', 'event_name', 'user_id', 'status_code', 'latency_ms'];
+    const header = columns.join(',') + '\n';
 
     const lines: string[] = [header];
+    const parsedRows: Record<string, unknown>[] = new Array(preset.rowCount);
 
     for (let i = 1; i <= preset.rowCount; i++) {
       const timestamp = new Date(startTime + i * 1000).toISOString();
       if (isMetrics) {
-        const cpu = (15 + ((i * 7) % 85)).toFixed(1);
-        const mem = (512 + ((i * 31) % 3500)).toString();
-        const disk = ((i * 13) % 4096).toString();
+        const cpu = Number((15 + ((i * 7) % 85)).toFixed(1));
+        const mem = 512 + ((i * 31) % 3500);
+        const disk = (i * 13) % 4096;
         const service = `srv-node-0${(i % 8) + 1}`;
         lines.push(`${i},${timestamp},${cpu},${mem},${disk},${service}\n`);
+        parsedRows[i - 1] = {
+          id: i,
+          timestamp,
+          cpu_pct: cpu,
+          memory_mb: mem,
+          disk_read_kb: disk,
+          service_name: service,
+        };
       } else {
         const event = EVENT_NAMES[i % EVENT_NAMES.length]!;
         const userId = `usr_${1000 + (i % 850)}`;
         const code = HTTP_CODES[i % HTTP_CODES.length]!;
-        const latency = (12 + ((i * 17) % 450)).toString();
+        const latency = 12 + ((i * 17) % 450);
         lines.push(`${i},${timestamp},${event},${userId},${code},${latency}\n`);
+        parsedRows[i - 1] = {
+          id: i,
+          timestamp,
+          event_name: event,
+          user_id: userId,
+          status_code: code,
+          latency_ms: latency,
+        };
       }
     }
 
@@ -72,6 +90,8 @@ export function generateSyntheticDataset(preset: SyntheticPreset): LoadedDataset
       rawText,
       isSynthetic: true,
       rowCountEstimate: preset.rowCount,
+      parsedRows,
+      columns,
     };
   }
 
@@ -98,5 +118,7 @@ export function generateSyntheticDataset(preset: SyntheticPreset): LoadedDataset
     rawText,
     isSynthetic: true,
     rowCountEstimate: preset.rowCount,
+    parsedRows: records,
+    columns: records[0] ? Object.keys(records[0]) : [],
   };
 }

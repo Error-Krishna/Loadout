@@ -253,6 +253,51 @@ export default function SettingsView() {
         </p>
       </div>
 
+      {/* Free-First AI Architecture */}
+      <div className="p-6 rounded-lg border border-slate-800 bg-[var(--color-surface)] space-y-4">
+        <div>
+          <span className="text-xs font-mono text-cyan-400 uppercase tracking-wider">
+            AI Assistant Configuration
+          </span>
+          <h3 className="text-sm font-semibold text-slate-100 font-mono">
+            Free-First AI Architecture
+          </h3>
+          <p className="text-xs text-slate-400 mt-0.5">
+            LOADOUT is designed free-first with zero commercial vendor lock-in. No BYOK API keys
+            (OpenAI, Anthropic, Gemini) are required or accepted.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-mono">
+          <div className="p-4 rounded-lg border border-emerald-900/60 bg-emerald-950/20 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-emerald-300">1. Offline AI (Default)</span>
+              <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-900 text-emerald-200">
+                ACTIVE
+              </span>
+            </div>
+            <p className="text-slate-300 text-[11px]">
+              Local deterministic heuristic engine. Runs entirely within the browser. 100% zero
+              network egress, zero API keys, and instantaneous response times.
+            </p>
+          </div>
+
+          <div className="p-4 rounded-lg border border-cyan-900/60 bg-cyan-950/20 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-cyan-300">2. Groq Cloud AI</span>
+              <span className="text-[10px] px-2 py-0.5 rounded bg-cyan-900 text-cyan-200">
+                FREE OPT-IN
+              </span>
+            </div>
+            <p className="text-slate-300 text-[11px]">
+              Ultra-fast open-weight models (Llama 3.3 70B) served via backend endpoint. Only
+              sanitized, row-free benchmark summaries are transmitted. Automatically falls back to
+              Offline AI if unavailable.
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Client Data Reset */}
       <div className="p-6 rounded-lg border border-slate-800 bg-[var(--color-surface)] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>

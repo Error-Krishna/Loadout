@@ -9,6 +9,9 @@ const envSchema = z.object({
   CORS_ORIGIN: z.string().url(),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   JWT_ACCESS_SECRET: z.string().min(32).optional(),
+  GROQ_API_KEY: z.string().optional(),
+  GROQ_MODEL: z.string().default('llama-3.3-70b-versatile'),
+  GROQ_ENDPOINT: z.string().url().default('https://api.groq.com/openai/v1/chat/completions'),
 });
 
 const parsedEnv = envSchema.parse(process.env);

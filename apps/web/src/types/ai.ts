@@ -12,7 +12,7 @@ import type { AnalysisConfiguration } from './dataset.ts';
 
 export type AIMode = 'offline' | 'cloud-opt-in';
 
-export type AIProviderType = 'offline' | 'openai' | 'gemini';
+export type AIProviderType = 'offline' | 'groq';
 
 export interface AICitation {
   sourceId: string;
@@ -40,7 +40,6 @@ export interface AISuggestedAction {
 
 export interface AIProviderConfig {
   provider: AIProviderType;
-  apiKey?: string;
   model?: string;
   endpoint?: string;
   mode: AIMode;

@@ -180,5 +180,74 @@ describe('Robust Dataset Ingestion Engine (Phase Two)', () => {
       expect(progressSteps.length).toBeGreaterThanOrEqual(1);
       expect(progressSteps[progressSteps.length - 1]).toBe(100);
     });
+
+    it('correctly parses CSV larger than 512 KB and preserves all records across chunk boundaries', async () => {
+      // Build a CSV dataset strictly larger than 512 KB (e.g. ~600 KB)
+      const lines = ['id,uuid,payload,score,active'];
+      const targetRows = 6000;
+      for (let i = 1; i <= targetRows; i++) {
+        lines.push(
+          `${i},usr_uuid_000000000000000000000000000_${i},sample_data_payload_long_string_content_${i},${(i * 1.5).toFixed(2)},true`,
+        );
+      }
+      const largeCsv = lines.join('\n');
+      const blob = new Blob([largeCsv], { type: 'text/csv' });
+      expect(blob.size).toBeGreaterThan(512 * 1024); // Confirms > 512 KB
+
+      const res = await streamParseFile(blob, 'csv', {
+        chunkSizeBytes: 32 * 1024,
+      });
+
+      expect(res.totalRows).toBe(targetRows);
+      expect(res.rows).toHaveLength(targetRows);
+      // Verify first and last rows
+      expect(res.rows[0]?.['id']).toBe(1);
+      expect(res.rows[targetRows - 1]?.['id']).toBe(targetRows);
+      expect(res.rows[targetRows - 1]?.['active']).toBe(true);
+    });
+
+    it('correctly handles quoted multiline fields and escaped quotes spanning across chunk boundaries', async () => {
+      // Create a CSV with multiline field and escaped quote split across 16-byte chunks
+      const csv =
+        'id,summary,note\n1,"Line 1\nLine 2\nLine 3","He said ""Hello"" clearly"\n2,"Simple","End"';
+      const blob = new Blob([csv], { type: 'text/csv' });
+
+      const res = await streamParseFile(blob, 'csv', {
+        chunkSizeBytes: 12, // Very small chunk size to guarantee slicing inside quotes and newlines
+      });
+
+      expect(res.rows).toHaveLength(2);
+      expect(res.rows[0]?.['summary']).toBe('Line 1\nLine 2\nLine 3');
+      expect(res.rows[0]?.['note']).toBe('He said "Hello" clearly');
+      expect(res.rows[1]?.['summary']).toBe('Simple');
+    });
+
+    it('correctly parses NDJSON larger than 512 KB incrementally', async () => {
+      const records: string[] = [];
+      const targetRows = 6000;
+      for (let i = 1; i <= targetRows; i++) {
+        records.push(
+          JSON.stringify({
+            id: i,
+            service: `service_node_cluster_${i % 10}`,
+            payload: `telemetry_event_data_stream_payload_record_${i}`,
+            latency: 12.5 + (i % 50),
+            status: 200,
+          }),
+        );
+      }
+      const largeNdjson = records.join('\n') + '\n';
+      const blob = new Blob([largeNdjson], { type: 'application/x-ndjson' });
+      expect(blob.size).toBeGreaterThan(512 * 1024);
+
+      const res = await streamParseFile(blob, 'ndjson', {
+        chunkSizeBytes: 32 * 1024,
+      });
+
+      expect(res.totalRows).toBe(targetRows);
+      expect(res.rows).toHaveLength(targetRows);
+      expect(res.rows[0]?.['id']).toBe(1);
+      expect(res.rows[targetRows - 1]?.['id']).toBe(targetRows);
+    });
   });
 });

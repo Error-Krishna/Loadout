@@ -12,6 +12,7 @@ import { notFoundHandler } from './common/middleware/not-found.js';
 import { errorHandler } from './common/middleware/error-handler.js';
 import { healthRouter } from './modules/health/health.routes.js';
 import { authRouter } from './modules/auth/auth.routes.js';
+import { aiRouter } from './modules/ai/ai.routes.js';
 
 export const app = express();
 
@@ -69,6 +70,8 @@ app.get('/', (_req, res) => {
 app.use('/health', healthRouter);
 app.use('/api/v1/health', healthRouter);
 app.use('/api/v1/auth', authRouter);
+app.use('/api/ai', aiRouter);
+app.use('/api/v1/ai', aiRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

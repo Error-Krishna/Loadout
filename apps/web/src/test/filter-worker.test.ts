@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, beforeAll, beforeEach } from 'vitest';
 import type { FilterWorkerInboundMessage, FilterWorkerOutboundMessage } from '../types/dataset';
 
 describe('dataset filter worker messaging optimization (M1-T05)', () => {
@@ -109,5 +109,101 @@ describe('dataset filter worker messaging optimization (M1-T05)', () => {
 
     expect(legacyRequest.id).toBe(42);
     expect(legacyRequest.rows).toHaveLength(3);
+  });
+
+  describe('Live execution of dataset-filter.worker.ts message handler', () => {
+    let postedMessages: FilterWorkerOutboundMessage[] = [];
+
+    beforeAll(async () => {
+      postedMessages = [];
+      (self as unknown as { postMessage: (msg: FilterWorkerOutboundMessage) => void }).postMessage =
+        (msg: FilterWorkerOutboundMessage) => {
+          postedMessages.push(msg);
+        };
+      // Load the worker script which sets self.onmessage
+      await import('../workers/dataset-filter.worker');
+    });
+
+    beforeEach(() => {
+      postedMessages = [];
+    });
+
+    it('processes init message, caches dataset, and posts ready message', () => {
+      const event = new MessageEvent('message', {
+        data: {
+          type: 'init',
+          datasetId: 'dataset-live-1',
+          rows: sampleRows,
+          columns,
+        },
+      });
+
+      self.onmessage!(event);
+
+      expect(postedMessages).toHaveLength(1);
+      expect(postedMessages[0]).toEqual({
+        type: 'ready',
+        datasetId: 'dataset-live-1',
+        rowCount: 3,
+      });
+    });
+
+    it('processes filter query using cached rows and returns matching indices', () => {
+      const event = new MessageEvent('message', {
+        data: {
+          type: 'filter',
+          id: 501,
+          query: 'engineer',
+        },
+      });
+
+      self.onmessage!(event);
+
+      expect(postedMessages).toHaveLength(1);
+      const res = postedMessages[0] as {
+        type: 'filtered';
+        id: number;
+        filteredIndices: number[];
+        durationMs: number;
+      };
+      expect(res.type).toBe('filtered');
+      expect(res.id).toBe(501);
+      expect(res.filteredIndices).toEqual([0, 2]); // Alice & Charlie
+      expect(typeof res.durationMs).toBe('number');
+    });
+
+    it('clears worker cache when clear message is posted', () => {
+      const clearEvent = new MessageEvent('message', {
+        data: { type: 'clear' },
+      });
+      self.onmessage!(clearEvent);
+
+      // Subsequent query returns empty because cache was cleared
+      const filterEvent = new MessageEvent('message', {
+        data: { type: 'filter', id: 502, query: 'engineer' },
+      });
+      self.onmessage!(filterEvent);
+
+      const res = postedMessages[0] as { type: 'filtered'; filteredIndices: number[] };
+      expect(res.filteredIndices).toEqual([]);
+    });
+
+    it('handles legacy filter message payload with rows directly', () => {
+      const legacyEvent = new MessageEvent('message', {
+        data: {
+          id: 999,
+          query: 'manager',
+          rows: sampleRows,
+          columns,
+        },
+      });
+
+      self.onmessage!(legacyEvent);
+
+      expect(postedMessages).toHaveLength(1);
+      const res = postedMessages[0] as { id: number; filteredIndices: number[] };
+      expect(res.id).toBe(999);
+      expect(res.filteredIndices).toEqual([1]); // Bob Jones
+    });
   });
 });

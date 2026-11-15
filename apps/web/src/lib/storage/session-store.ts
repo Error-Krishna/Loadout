@@ -16,7 +16,7 @@ import type {
   ExportBundle,
   ImportSummary,
 } from '../../types/storage.ts';
-import { DEFAULT_WORKBENCH_SETTINGS } from '../../types/storage.ts';
+import { DEFAULT_WORKBENCH_SETTINGS, exportBundleSchema } from '../../types/storage.ts';
 import type { ExperimentReport } from '../../types/dataset.ts';
 import type { BenchmarkComparisonRecord } from '../../types/benchmark.ts';
 
@@ -154,48 +154,52 @@ export async function exportWorkbenchData(): Promise<ExportBundle> {
 }
 
 /**
- * Imports an external data bundle into local storage with validation.
+ * Imports an external data bundle into local storage with Zod schema validation.
  */
 export async function importWorkbenchData(bundle: ExportBundle): Promise<ImportSummary> {
-  if (!bundle || bundle.version !== 1) {
-    throw new Error('Unsupported or corrupt export bundle format.');
+  const parseResult = exportBundleSchema.safeParse(bundle);
+  if (!parseResult.success) {
+    throw new Error(
+      `Unsupported or corrupt export bundle format: ${parseResult.error.issues[0]?.message ?? 'Schema mismatch'}`,
+    );
   }
 
+  const validBundle = parseResult.data;
   const storage = getStorage();
   let sessionsImported = 0;
   let benchmarkResultsImported = 0;
   let reportsImported = 0;
   let settingsImported = 0;
 
-  if (Array.isArray(bundle.sessions)) {
-    for (const session of bundle.sessions) {
-      if (session && session.id) {
+  if (Array.isArray(validBundle.sessions)) {
+    for (const session of validBundle.sessions) {
+      if (session && session.id && typeof session.id === 'string') {
         await storage.put('sessions', session.id, session);
         sessionsImported++;
       }
     }
   }
 
-  if (Array.isArray(bundle.benchmarkResults)) {
-    for (const result of bundle.benchmarkResults) {
-      if (result && result.id) {
+  if (Array.isArray(validBundle.benchmarkResults)) {
+    for (const result of validBundle.benchmarkResults) {
+      if (result && result.id && typeof result.id === 'string') {
         await storage.put('benchmarkResults', result.id, result);
         benchmarkResultsImported++;
       }
     }
   }
 
-  if (Array.isArray(bundle.reports)) {
-    for (const report of bundle.reports) {
-      if (report && report.id) {
+  if (Array.isArray(validBundle.reports)) {
+    for (const report of validBundle.reports) {
+      if (report && report.id && typeof report.id === 'string') {
         await storage.put('reports', report.id, report);
         reportsImported++;
       }
     }
   }
 
-  if (bundle.settings && typeof bundle.settings === 'object') {
-    await saveSettings(bundle.settings);
+  if (validBundle.settings) {
+    await saveSettings(validBundle.settings);
     settingsImported = 1;
   }
 

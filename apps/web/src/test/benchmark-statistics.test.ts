@@ -17,6 +17,9 @@ import {
   assessSampleConfidence,
   aggregateBenchmarkDistribution,
   assessComparisonUncertainty,
+  calculateMannWhitneyU,
+  calculateBootstrapMedianConfidenceInterval,
+  approximateErfc,
 } from '../lib/benchmark/statistics';
 import type { BenchmarkDistribution, BenchmarkTrial } from '../types/benchmark';
 
@@ -336,6 +339,87 @@ describe('Benchmark Statistics & Uncertainty Module (M1-T02a)', () => {
 
       const result = assessComparisonUncertainty(invalidDist, validDist);
       expect(result.verdict).toBe('invalid');
+    });
+  });
+
+  describe('calculateMannWhitneyU', () => {
+    it('calculates exact U statistics and rank sums for distinct samples', () => {
+      // Sample 1: [10, 20, 30] (n1 = 3)
+      // Sample 2: [40, 50, 60] (n2 = 3)
+      // All of sample 1 is smaller than sample 2.
+      // Ranks:
+      // 10 -> 1, 20 -> 2, 30 -> 3 (RankSum1 = 1 + 2 + 3 = 6)
+      // 40 -> 4, 50 -> 5, 60 -> 6 (RankSum2 = 4 + 5 + 6 = 15)
+      // Total ranks = 21 = 6 * 7 / 2.
+      // U1 = 3 * 3 + 3 * 4 / 2 - 6 = 9 + 6 - 6 = 9
+      // U2 = 3 * 3 + 3 * 4 / 2 - 15 = 9 + 6 - 15 = 0
+      // U = min(9, 0) = 0
+      const res = calculateMannWhitneyU([10, 20, 30], [40, 50, 60]);
+      expect(res.n1).toBe(3);
+      expect(res.n2).toBe(3);
+      expect(res.rankSum1).toBe(6);
+      expect(res.rankSum2).toBe(15);
+      expect(res.u1).toBe(9);
+      expect(res.u2).toBe(0);
+      expect(res.u).toBe(0);
+      expect(res.hasTies).toBe(false);
+      expect(res.tieCorrection).toBe(0);
+    });
+
+    it('correctly assigns exact mid-ranks and tie-corrected variance when ties exist', () => {
+      // Sample 1: [10, 20, 30]
+      // Sample 2: [20, 30, 40]
+      // Combined sorted: 10(1), 20(1), 20(2), 30(1), 30(2), 40(2)
+      // 10: rank 1
+      // 20s: indices 2, 3 -> mid-rank (2+3)/2 = 2.5
+      // 30s: indices 4, 5 -> mid-rank (4+5)/2 = 4.5
+      // 40: rank 6
+      // RankSum1: 1 + 2.5 + 4.5 = 8
+      // RankSum2: 2.5 + 4.5 + 6 = 13
+      // Total = 8 + 13 = 21.
+      // Ties: two groups of size 2 -> tieCorrection = (2^3 - 2) + (2^3 - 2) = 6 + 6 = 12
+      const res = calculateMannWhitneyU([10, 20, 30], [20, 30, 40]);
+      expect(res.hasTies).toBe(true);
+      expect(res.tieCorrection).toBe(12);
+      expect(res.rankSum1).toBe(8);
+      expect(res.rankSum2).toBe(13);
+      expect(res.u1).toBe(7);
+      expect(res.u2).toBe(2);
+      expect(res.u).toBe(2);
+    });
+
+    it('detects significant difference between separated distributions', () => {
+      const fast = [1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0];
+      const slow = [10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7, 10.8, 10.9, 11.0];
+
+      const res = calculateMannWhitneyU(fast, slow);
+      expect(res.u).toBe(0);
+      expect(res.isSignificant).toBe(true);
+      expect(res.pValue).toBeLessThan(0.01);
+    });
+
+    it('computes continuity-corrected Z-score and p-value', () => {
+      expect(approximateErfc(0)).toBeCloseTo(1, 4);
+      expect(approximateErfc(1)).toBeCloseTo(0.1573, 3);
+    });
+  });
+
+  describe('calculateBootstrapMedianConfidenceInterval', () => {
+    it('calculates point estimate and confidence interval using deterministic seed', () => {
+      const baseline = [100, 102, 105, 101, 104];
+      const candidate = [20, 22, 21, 23, 22];
+
+      const ci = calculateBootstrapMedianConfidenceInterval(baseline, candidate, {
+        resamples: 500,
+        confidenceLevel: 0.95,
+        seed: 12345,
+      });
+
+      // Baseline median: 102, Candidate median: 22 -> Delta: -80
+      expect(ci.pointEstimateMs).toBe(-80);
+      expect(ci.lowerMs).toBeLessThanOrEqual(ci.pointEstimateMs);
+      expect(ci.upperMs).toBeGreaterThanOrEqual(ci.pointEstimateMs);
+      expect(ci.upperMs).toBeLessThan(0); // Definite negative shift (speedup)
     });
   });
 });

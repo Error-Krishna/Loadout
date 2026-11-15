@@ -181,10 +181,12 @@ export interface RenderWorkloadOutput {
   renderedRows: Record<string, unknown>[];
   virtualOffsetTop?: number;
   totalScrollHeight?: number;
+  isDomMeasured?: boolean;
 }
 
 /**
  * Baseline: Naive synchronous preparation of all dataset rows for un-virtualized DOM table.
+ * Mounts real DOM elements into a container when in a browser/DOM environment to measure genuine layout overhead.
  */
 export const naiveRenderWorkload: SynchronousWorkloadAdapter<
   RenderWorkloadContext,
@@ -197,7 +199,37 @@ export const naiveRenderWorkload: SynchronousWorkloadAdapter<
     const { rows, columns } = context;
     const colCount = columns.length;
     const mountedRowCount = rows.length;
-    const domNodeCount = mountedRowCount * (colCount + 1); // Row + cell elements
+
+    let domNodeCount = mountedRowCount * (colCount + 1);
+    let isDomMeasured = false;
+
+    // Genuine DOM mounting in browser / JSDOM environment
+    if (typeof document !== 'undefined') {
+      const container = document.createElement('div');
+      const table = document.createElement('table');
+      const tbody = document.createElement('tbody');
+
+      const maxMount = Math.min(mountedRowCount, 5000);
+      for (let i = 0; i < maxMount; i++) {
+        const row = rows[i];
+        if (!row) continue;
+        const tr = document.createElement('tr');
+        for (let c = 0; c < colCount; c++) {
+          const td = document.createElement('td');
+          td.textContent = String(row[columns[c]!] ?? '');
+          tr.appendChild(td);
+        }
+        tbody.appendChild(tr);
+      }
+      table.appendChild(tbody);
+      container.appendChild(table);
+
+      domNodeCount = tbody.querySelectorAll('*').length;
+      isDomMeasured = true;
+
+      // Guaranteed cleanup to avoid leaking detached nodes across iterations
+      container.replaceChildren();
+    }
 
     // Prepare full tabular representation
     const renderedRows: Record<string, unknown>[] = new Array(mountedRowCount);
@@ -209,17 +241,20 @@ export const naiveRenderWorkload: SynchronousWorkloadAdapter<
       mountedRowCount,
       domNodeCount,
       renderedRows,
+      isDomMeasured,
     };
   },
 
   collectMetrics: (output: RenderWorkloadOutput) => ({
     domNodes: output.domNodeCount,
     mountedRowCount: output.mountedRowCount,
+    isDomMeasured: output.isDomMeasured ?? false,
   }),
 };
 
 /**
  * Candidate: Virtualized viewport-only row calculation (TanStack Virtual pattern).
+ * Mounts only the windowed rows into the viewport container, achieving constant DOM elements.
  */
 export const virtualizedRenderWorkload: SynchronousWorkloadAdapter<
   RenderWorkloadContext,
@@ -239,7 +274,42 @@ export const virtualizedRenderWorkload: SynchronousWorkloadAdapter<
     const endIndex = Math.min(totalRows - 1, startIndex + visibleCount + overscan * 2);
 
     const mountedRowCount = Math.max(0, endIndex - startIndex + 1);
-    const domNodeCount = mountedRowCount * (colCount + 1);
+    let domNodeCount = mountedRowCount * (colCount + 1);
+    let isDomMeasured = false;
+
+    // Genuine windowed DOM mounting in browser / JSDOM environment
+    if (typeof document !== 'undefined') {
+      const container = document.createElement('div');
+      const viewport = document.createElement('div');
+      viewport.style.height = `${viewportHeight}px`;
+      viewport.style.overflow = 'auto';
+
+      const table = document.createElement('table');
+      const tbody = document.createElement('tbody');
+
+      for (let i = startIndex; i <= endIndex; i++) {
+        const row = rows[i];
+        if (!row) continue;
+        const tr = document.createElement('tr');
+        for (let c = 0; c < colCount; c++) {
+          const td = document.createElement('td');
+          td.textContent = String(row[columns[c]!] ?? '');
+          tr.appendChild(td);
+        }
+        tbody.appendChild(tr);
+      }
+
+      table.appendChild(tbody);
+      viewport.appendChild(table);
+      container.appendChild(viewport);
+
+      domNodeCount = tbody.querySelectorAll('*').length;
+      isDomMeasured = true;
+
+      // Teardown
+      container.replaceChildren();
+    }
+
     const virtualOffsetTop = startIndex * rowHeight;
     const totalScrollHeight = totalRows * rowHeight;
 
@@ -256,12 +326,14 @@ export const virtualizedRenderWorkload: SynchronousWorkloadAdapter<
       renderedRows,
       virtualOffsetTop,
       totalScrollHeight,
+      isDomMeasured,
     };
   },
 
   collectMetrics: (output: RenderWorkloadOutput) => ({
     domNodes: output.domNodeCount,
     mountedRowCount: output.mountedRowCount,
+    isDomMeasured: output.isDomMeasured ?? false,
   }),
 };
 

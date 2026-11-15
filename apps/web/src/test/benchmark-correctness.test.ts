@@ -427,6 +427,20 @@ describe('LOADOUT Correctness Verification Engine (M1-T03)', () => {
       // Tolerance of 1e-9 passes
       const tolResult = verifyCorrectness(baseline, candidate, { floatTolerance: 1e-9 });
       expect(tolResult.status).toBe('passed');
+      expect(tolResult.sampleHashParity).toBe(true);
+    });
+
+    it('handles multiset array comparisons with floating point tolerance', () => {
+      const baseline = [{ v: 1.0001 }, { v: 2.0002 }];
+      const candidate = [{ v: 2.0003 }, { v: 1.0002 }];
+
+      const res = verifyCorrectness(baseline, candidate, {
+        orderSignificant: false,
+        floatTolerance: 0.001,
+      });
+
+      expect(res.status).toBe('passed');
+      expect(res.sampleHashParity).toBe(true);
     });
   });
 

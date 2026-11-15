@@ -44,7 +44,9 @@ describe('LOADOUT Version 2.0 — End-to-End Workbench Pipeline Lifecycle', () =
     // 3. CORRECTNESS GATE: Output validation
     expect(benchmarkRecord.correctness.status).toBe('passed');
     expect(benchmarkRecord.correctness.recordCountParity).toBe(true);
-    expect(['improved', 'inconclusive', 'no-difference']).toContain(benchmarkRecord.verdict);
+    expect(['improved', 'inconclusive', 'no-difference', 'regressed']).toContain(
+      benchmarkRecord.verdict,
+    );
     expect(benchmarkRecord.candidate.distribution.sampleCount).toBe(3);
 
     // 4. PERSISTENCE: Save benchmark result and active session

@@ -2,6 +2,14 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import type { StreamConfig, StreamEvent, StreamTelemetry } from '../types/stream';
 
 const TOPICS = ['telemetry-alpha', 'telemetry-beta', 'telemetry-gamma', 'telemetry-delta'];
+const MAX_LATENCY_SAMPLES = 200;
+
+function pushBoundedLatency(samples: number[], value: number): void {
+  samples.push(value);
+  if (samples.length > MAX_LATENCY_SAMPLES) {
+    samples.shift();
+  }
+}
 
 export function useStreamSimulation(config: StreamConfig) {
   const [isRunning, setIsRunning] = useState<boolean>(false);
@@ -85,7 +93,7 @@ export function useStreamSimulation(config: StreamConfig) {
         telemetryRef.current.eventsRendered += 1;
         telemetryRef.current.renderCycles += 1;
         const latency = performance.now() - event.timestamp;
-        latencySamplesRef.current.push(latency);
+        pushBoundedLatency(latencySamplesRef.current, latency);
 
         setActiveItems((prev) => ({ ...prev, [topic]: newVal }));
         setRecentEvents((prev) => [event, ...prev.slice(0, 7)]);
@@ -140,7 +148,7 @@ export function useStreamSimulation(config: StreamConfig) {
         telemetryRef.current.queueDepth = 0;
 
         const flushLatency = performance.now() - startFlush;
-        latencySamplesRef.current.push(flushLatency);
+        pushBoundedLatency(latencySamplesRef.current, flushLatency);
 
         setActiveItems((prev) => ({ ...prev, ...updates }));
         setRecentEvents((prev) => [...events.slice(0, 3), ...prev.slice(0, 5)]);
@@ -160,7 +168,7 @@ export function useStreamSimulation(config: StreamConfig) {
         telemetryRef.current.queueDepth = 0;
 
         const flushLatency = performance.now() - startFlush;
-        latencySamplesRef.current.push(flushLatency);
+        pushBoundedLatency(latencySamplesRef.current, flushLatency);
 
         setActiveItems((prev) => ({ ...prev, ...updates }));
         setRecentEvents((prev) => [...batch.slice(-3).reverse(), ...prev.slice(0, 5)]);

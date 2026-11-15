@@ -1,14 +1,15 @@
 /**
- * LOADOUT Version 2.0 — Robust Streaming Dataset Ingestion Engine
+ * LOADOUT Version 2.1 — Robust Incremental Streaming Dataset Ingestion Engine
  *
- * Implements Phase Two Requirements:
- * - RFC 4180-compliant CSV parser: quoted fields, commas inside quotes, escaped quotes (""), and multiline values.
- * - Streaming NDJSON / JSONL line-by-line parser with fault-tolerant error recovery.
- * - JSON array streaming parser.
- * - Chunked file slicing with backpressure yields to maintain 60 FPS UI responsiveness.
+ * Implements Genuinely Incremental Parsing:
+ * - Streaming RFC 4180-compliant CSV parser: state machine preserves state across chunk boundaries
+ *   (quoted fields, commas inside quotes, escaped quotes (""), and multiline values spanning chunks).
+ * - Streaming NDJSON / JSONL line-by-line parser with chunk buffering and fault-tolerant error recovery.
+ * - Zero full-file memory duplication: avoids concatenating 100MB chunks into monolithic strings.
+ * - Microtask backpressure yields to maintain 60 FPS UI responsiveness.
  * - AbortSignal cancellation support at chunk boundaries.
  * - Real-time IngestionProgress reporting (bytes processed, rows parsed, percent).
- * - Bounded row ceiling safeguards to prevent out-of-memory crashes on enormous datasets.
+ * - Bounded row ceiling safeguards with accurate total row counting.
  */
 
 import type { DatasetFormat, StreamParserOptions } from '../../types/dataset.ts';
@@ -22,13 +23,274 @@ export interface ParseResult {
 }
 
 /**
- * Parses an RFC 4180 compliant CSV text stream incrementally.
- *
- * State Machine States:
- * 0: START_FIELD
- * 1: IN_UNQUOTED
- * 2: IN_QUOTED
- * 3: AFTER_QUOTE
+ * Automatically infers typed numbers and booleans from CSV string tokens.
+ */
+export function parseInferredPrimitive(val: string): string | number | boolean | null {
+  const trimmed = val.trim();
+  if (trimmed === '') return '';
+  if (trimmed === 'null' || trimmed === 'NULL') return null;
+  if (trimmed === 'true' || trimmed === 'TRUE') return true;
+  if (trimmed === 'false' || trimmed === 'FALSE') return false;
+
+  // Numeric check (reject hex or leading zero codes like phone numbers / zip codes)
+  if (
+    /^-?\d+(\.\d+)?$/.test(trimmed) &&
+    !(trimmed.length > 1 && trimmed.startsWith('0') && !trimmed.startsWith('0.'))
+  ) {
+    const num = Number(trimmed);
+    if (!Number.isNaN(num)) return num;
+  }
+
+  return val;
+}
+
+/**
+ * Incremental stateful RFC 4180 CSV parser that processes chunk-by-chunk
+ * without accumulating raw file text into monolithic memory buffers.
+ */
+export class IncrementalCsvParser {
+  private delimiter: string;
+  private maxRows: number;
+  public columns: string[] = [];
+  public rows: Record<string, unknown>[] = [];
+  public totalRows = 0;
+  public warnings: string[] = [];
+
+  private inQuotes = false;
+  private currentField = '';
+  private currentRecord: string[] = [];
+  private isHeaderCaptured = false;
+  private pendingQuoteAtChunkEnd = false;
+  private pendingCrAtChunkEnd = false;
+
+  constructor(delimiter = ',', maxRows = 100_000) {
+    this.delimiter = delimiter;
+    this.maxRows = maxRows;
+  }
+
+  public pushChunk(chunk: string): void {
+    if (!chunk || chunk.length === 0) return;
+
+    let i = 0;
+    const len = chunk.length;
+
+    // Handle quote at boundary of previous chunk
+    if (this.pendingQuoteAtChunkEnd) {
+      this.pendingQuoteAtChunkEnd = false;
+      if (chunk[0] === '"') {
+        // Was an escaped quote across boundary: ""
+        this.currentField += '"';
+        i = 1;
+      } else {
+        // Was a closing quote
+        this.inQuotes = false;
+      }
+    }
+
+    // Handle carriage return at boundary of previous chunk
+    if (this.pendingCrAtChunkEnd) {
+      this.pendingCrAtChunkEnd = false;
+      if (chunk[0] === '\n') {
+        i = 1;
+      }
+      this.emitCurrentRecord();
+    }
+
+    while (i < len) {
+      const char = chunk[i]!;
+
+      if (this.inQuotes) {
+        if (char === '"') {
+          // Check for escaped quote ""
+          if (i + 1 < len) {
+            if (chunk[i + 1] === '"') {
+              this.currentField += '"';
+              i += 2;
+              continue;
+            } else {
+              // Closing quote
+              this.inQuotes = false;
+              i++;
+              continue;
+            }
+          } else {
+            // Quote at the very end of this chunk: defer resolution to next chunk
+            this.pendingQuoteAtChunkEnd = true;
+            break;
+          }
+        } else {
+          // Preserved character inside quoted field (including comma, \n, \r)
+          this.currentField += char;
+          i++;
+        }
+      } else {
+        if (char === '"') {
+          this.inQuotes = true;
+          i++;
+        } else if (char === this.delimiter) {
+          this.currentRecord.push(this.currentField);
+          this.currentField = '';
+          i++;
+        } else if (char === '\r') {
+          if (i + 1 < len) {
+            if (chunk[i + 1] === '\n') {
+              i += 2;
+            } else {
+              i++;
+            }
+            this.emitCurrentRecord();
+          } else {
+            // CR at end of chunk: defer resolution of CRLF to next chunk
+            this.pendingCrAtChunkEnd = true;
+            break;
+          }
+        } else if (char === '\n') {
+          this.emitCurrentRecord();
+          i++;
+        } else {
+          this.currentField += char;
+          i++;
+        }
+      }
+    }
+  }
+
+  private emitCurrentRecord(): void {
+    this.currentRecord.push(this.currentField);
+    this.currentField = '';
+
+    // Ignore empty trailing newline records
+    if (this.currentRecord.length === 1 && this.currentRecord[0] === '' && this.isHeaderCaptured) {
+      this.currentRecord = [];
+      return;
+    }
+
+    if (!this.isHeaderCaptured) {
+      this.columns = this.currentRecord.map((h, idx) => {
+        const clean = h.trim();
+        return clean.length > 0 ? clean : `column_${idx + 1}`;
+      });
+      this.isHeaderCaptured = true;
+    } else {
+      this.totalRows++;
+      if (this.rows.length < this.maxRows) {
+        const rowObj: Record<string, unknown> = {};
+        for (let c = 0; c < this.columns.length; c++) {
+          const colName = this.columns[c]!;
+          const rawVal = this.currentRecord[c] !== undefined ? this.currentRecord[c]! : '';
+          rowObj[colName] = parseInferredPrimitive(rawVal);
+        }
+        this.rows.push(rowObj);
+      }
+    }
+
+    this.currentRecord = [];
+  }
+
+  public flush(): {
+    columns: string[];
+    rows: Record<string, unknown>[];
+    totalRows: number;
+    warnings: string[];
+  } {
+    if (this.pendingQuoteAtChunkEnd) {
+      this.inQuotes = false;
+      this.pendingQuoteAtChunkEnd = false;
+    }
+
+    if (this.currentField.length > 0 || this.currentRecord.length > 0) {
+      this.emitCurrentRecord();
+    }
+
+    return {
+      columns: this.columns,
+      rows: this.rows,
+      totalRows: this.totalRows,
+      warnings: this.warnings,
+    };
+  }
+}
+
+/**
+ * Incremental stateful NDJSON / JSONL parser.
+ */
+export class IncrementalNdjsonParser {
+  private maxRows: number;
+  public columns: string[] = [];
+  public rows: Record<string, unknown>[] = [];
+  public totalRows = 0;
+  public warnings: string[] = [];
+
+  private buffer = '';
+  private columnSet = new Set<string>();
+  private lineNumber = 0;
+
+  constructor(maxRows = 100_000) {
+    this.maxRows = maxRows;
+  }
+
+  public pushChunk(chunk: string): void {
+    if (!chunk || chunk.length === 0) return;
+
+    const combined = this.buffer + chunk;
+    const lines = combined.split('\n');
+
+    // Last element is uncompleted remainder for next chunk
+    this.buffer = lines.pop() ?? '';
+
+    for (let i = 0; i < lines.length; i++) {
+      this.processLine(lines[i]!);
+    }
+  }
+
+  private processLine(rawLine: string): void {
+    this.lineNumber++;
+    const line = rawLine.trim();
+    if (line.length === 0) return;
+
+    try {
+      const parsed = JSON.parse(line);
+      if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+        this.totalRows++;
+        if (this.rows.length < this.maxRows) {
+          const record = parsed as Record<string, unknown>;
+          this.rows.push(record);
+          for (const k of Object.keys(record)) {
+            this.columnSet.add(k);
+          }
+        }
+      } else {
+        this.warnings.push(`Line ${this.lineNumber}: Skipped non-object JSON value.`);
+      }
+    } catch {
+      this.warnings.push(`Line ${this.lineNumber}: Malformed JSON line.`);
+    }
+  }
+
+  public flush(): {
+    columns: string[];
+    rows: Record<string, unknown>[];
+    totalRows: number;
+    warnings: string[];
+  } {
+    if (this.buffer.trim().length > 0) {
+      this.processLine(this.buffer);
+      this.buffer = '';
+    }
+
+    this.columns = Array.from(this.columnSet);
+
+    return {
+      columns: this.columns,
+      rows: this.rows,
+      totalRows: this.totalRows,
+      warnings: this.warnings,
+    };
+  }
+}
+
+/**
+ * Parses full in-memory CSV text synchronously.
  */
 export function parseCsvRecords(
   text: string,
@@ -38,151 +300,26 @@ export function parseCsvRecords(
   if (!text || text.trim().length === 0) {
     return { columns: [], rows: [], totalRows: 0 };
   }
-
-  const records: string[][] = [];
-  let currentRecord: string[] = [];
-  let currentField = '';
-  let inQuotes = false;
-  let i = 0;
-  const len = text.length;
-
-  while (i < len) {
-    const char = text[i];
-
-    if (inQuotes) {
-      if (char === '"') {
-        // Lookahead for escaped quote ""
-        if (i + 1 < len && text[i + 1] === '"') {
-          currentField += '"';
-          i += 2;
-          continue;
-        } else {
-          // Closing quote
-          inQuotes = false;
-          i++;
-          continue;
-        }
-      } else {
-        // Any character inside quotes (including comma, \n, \r) is preserved
-        currentField += char;
-        i++;
-        continue;
-      }
-    } else {
-      if (char === '"') {
-        inQuotes = true;
-        i++;
-        continue;
-      } else if (char === delimiter) {
-        currentRecord.push(currentField);
-        currentField = '';
-        i++;
-        continue;
-      } else if (char === '\r') {
-        // Handle CRLF
-        if (i + 1 < len && text[i + 1] === '\n') {
-          i++;
-        }
-        currentRecord.push(currentField);
-        records.push(currentRecord);
-        currentRecord = [];
-        currentField = '';
-        i++;
-        continue;
-      } else if (char === '\n') {
-        currentRecord.push(currentField);
-        records.push(currentRecord);
-        currentRecord = [];
-        currentField = '';
-        i++;
-        continue;
-      } else {
-        currentField += char;
-        i++;
-        continue;
-      }
-    }
-  }
-
-  // Push remaining field / record if non-empty
-  if (currentField.length > 0 || currentRecord.length > 0) {
-    currentRecord.push(currentField);
-    records.push(currentRecord);
-  }
-
-  if (records.length === 0) {
-    return { columns: [], rows: [], totalRows: 0 };
-  }
-
-  // First record is header columns
-  const headerRecord = records[0] ?? [];
-  const columns = headerRecord.map((h, colIdx) => {
-    const clean = h.trim();
-    return clean.length > 0 ? clean : `column_${colIdx + 1}`;
-  });
-
-  const dataRecords = maxRows ? records.slice(1, maxRows + 1) : records.slice(1);
-  const rows: Record<string, unknown>[] = new Array(dataRecords.length);
-
-  for (let r = 0; r < dataRecords.length; r++) {
-    const rec = dataRecords[r]!;
-    const rowObj: Record<string, unknown> = {};
-    for (let c = 0; c < columns.length; c++) {
-      const colName = columns[c]!;
-      const rawVal = rec[c] !== undefined ? rec[c] : '';
-      rowObj[colName] = parseInferredPrimitive(rawVal);
-    }
-    rows[r] = rowObj;
-  }
-
+  const parser = new IncrementalCsvParser(delimiter, maxRows ?? 1_000_000);
+  parser.pushChunk(text);
+  const res = parser.flush();
   return {
-    columns,
-    rows,
-    totalRows: Math.max(0, records.length - 1),
+    columns: res.columns,
+    rows: res.rows,
+    totalRows: res.totalRows,
   };
 }
 
 /**
- * Parses NDJSON / JSONL text line by line.
+ * Parses full in-memory NDJSON / JSONL text synchronously.
  */
 export function parseNdjsonRecords(
   text: string,
   maxRows?: number,
 ): { columns: string[]; rows: Record<string, unknown>[]; totalRows: number; warnings: string[] } {
-  const lines = text.split('\n');
-  const rows: Record<string, unknown>[] = [];
-  const columnSet = new Set<string>();
-  const warnings: string[] = [];
-  let validLineCount = 0;
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]!.trim();
-    if (line.length === 0) continue;
-
-    try {
-      const parsed = JSON.parse(line);
-      if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
-        validLineCount++;
-        if (!maxRows || rows.length < maxRows) {
-          rows.push(parsed as Record<string, unknown>);
-          for (const key of Object.keys(parsed)) {
-            columnSet.add(key);
-          }
-        }
-      } else {
-        warnings.push(`Line ${i + 1}: Skipped non-object JSON value.`);
-      }
-    } catch {
-      warnings.push(`Line ${i + 1}: Malformed JSON line.`);
-    }
-  }
-
-  return {
-    columns: Array.from(columnSet),
-    rows,
-    totalRows: validLineCount,
-    warnings,
-  };
+  const parser = new IncrementalNdjsonParser(maxRows ?? 1_000_000);
+  parser.pushChunk(text);
+  return parser.flush();
 }
 
 /**
@@ -217,35 +354,9 @@ export function parseJsonArrayRecords(
 }
 
 /**
- * Automatically infers typed numbers and booleans from CSV string tokens.
- */
-function parseInferredPrimitive(val: string): string | number | boolean | null {
-  const trimmed = val.trim();
-  if (trimmed === '') return '';
-  if (trimmed === 'null' || trimmed === 'NULL') return null;
-  if (trimmed === 'true' || trimmed === 'TRUE') return true;
-  if (trimmed === 'false' || trimmed === 'FALSE') return false;
-
-  // Numeric check (reject hex or leading zero codes like phone numbers / zip codes)
-  if (
-    /^-?\d+(\.\d+)?$/.test(trimmed) &&
-    !(trimmed.length > 1 && trimmed.startsWith('0') && !trimmed.startsWith('0.'))
-  ) {
-    const num = Number(trimmed);
-    if (!Number.isNaN(num)) return num;
-  }
-
-  return val;
-}
-
-/**
- * Unified Chunked Streaming Parser for Files, Blobs, or raw Strings.
+ * Unified Incremental Streaming Parser for Files, Blobs, or raw Strings.
  *
- * Implements:
- * - Chunked byte streaming via slice() (default 64 KB chunks).
- * - Periodic event loop yields (backpressure mitigation).
- * - Immediate AbortSignal cancellation support.
- * - Real-time IngestionProgress dispatching.
+ * Emits records incrementally chunk-by-chunk without joining entire files into memory.
  */
 export async function streamParseFile(
   fileOrText: File | Blob | string,
@@ -253,12 +364,11 @@ export async function streamParseFile(
   options: StreamParserOptions = {},
 ): Promise<ParseResult> {
   const chunkSizeBytes = options.chunkSizeBytes ?? 64 * 1024; // 64 KB
-  const maxRows = options.maxRows ?? 50_000;
+  const maxRows = options.maxRows ?? 100_000;
   const signal = options.signal;
   const onProgress = options.onProgress;
   const yieldIntervalMs = options.yieldIntervalMs ?? 16;
-
-  const warnings: string[] = [];
+  const delimiter = options.delimiter ?? ',';
 
   // Handle in-memory string input directly
   if (typeof fileOrText === 'string') {
@@ -281,7 +391,7 @@ export async function streamParseFile(
       warnings?: string[];
     };
     if (format === 'csv') {
-      res = parseCsvRecords(fileOrText, options.delimiter ?? ',', maxRows);
+      res = parseCsvRecords(fileOrText, delimiter, maxRows);
     } else if (format === 'ndjson') {
       res = parseNdjsonRecords(fileOrText, maxRows);
     } else {
@@ -301,16 +411,19 @@ export async function streamParseFile(
       rows: res.rows,
       totalRows: res.totalRows,
       isTruncated: res.totalRows > maxRows,
-      warnings: [...warnings, ...(res.warnings || [])],
+      warnings: res.warnings ?? [],
     };
   }
 
-  // Handle File / Blob input chunk by chunk
+  // Handle File / Blob input incrementally chunk by chunk
   const totalBytes = fileOrText.size;
   let offset = 0;
-  const textChunks: string[] = [];
   const textDecoder = new TextDecoder('utf-8');
   let lastYieldTime = performance.now();
+
+  const csvParser = format === 'csv' ? new IncrementalCsvParser(delimiter, maxRows) : null;
+  const ndjsonParser = format === 'ndjson' ? new IncrementalNdjsonParser(maxRows) : null;
+  const jsonChunks: string[] = []; // Only accumulated if format is json array
 
   while (offset < totalBytes) {
     if (signal?.aborted) {
@@ -318,13 +431,13 @@ export async function streamParseFile(
     }
 
     const chunkBlob = fileOrText.slice(offset, offset + chunkSizeBytes);
+    const isStreamEnd = offset + chunkSizeBytes >= totalBytes;
     let textSegment: string;
 
     if (typeof (chunkBlob as Blob & { text?: () => Promise<string> }).text === 'function') {
       textSegment = await chunkBlob.text();
     } else if (typeof chunkBlob.arrayBuffer === 'function') {
       const buffer = await chunkBlob.arrayBuffer();
-      const isStreamEnd = offset + chunkSizeBytes >= totalBytes;
       textSegment = textDecoder.decode(buffer, { stream: !isStreamEnd });
     } else {
       textSegment = await new Promise<string>((resolve, reject) => {
@@ -335,17 +448,28 @@ export async function streamParseFile(
       });
     }
 
-    textChunks.push(textSegment);
+    if (csvParser) {
+      csvParser.pushChunk(textSegment);
+    } else if (ndjsonParser) {
+      ndjsonParser.pushChunk(textSegment);
+    } else {
+      jsonChunks.push(textSegment);
+    }
 
     offset += chunkSizeBytes;
     const processed = Math.min(offset, totalBytes);
     const percent = Math.min(95, Math.round((processed / totalBytes) * 90));
+    const currentRowsParsed = csvParser
+      ? csvParser.rows.length
+      : ndjsonParser
+        ? ndjsonParser.rows.length
+        : 0;
 
     onProgress?.({
       bytesProcessed: processed,
       totalBytes,
       percent,
-      rowsParsed: 0,
+      rowsParsed: currentRowsParsed,
       phase: 'reading',
     });
 
@@ -356,13 +480,11 @@ export async function streamParseFile(
     }
   }
 
-  const fullText = textChunks.join('');
-
   onProgress?.({
     bytesProcessed: totalBytes,
     totalBytes,
     percent: 95,
-    rowsParsed: 0,
+    rowsParsed: csvParser ? csvParser.rows.length : ndjsonParser ? ndjsonParser.rows.length : 0,
     phase: 'parsing',
   });
 
@@ -372,13 +494,14 @@ export async function streamParseFile(
     totalRows: number;
     warnings?: string[];
   };
+
   try {
-    if (format === 'csv') {
-      parsedData = parseCsvRecords(fullText, options.delimiter ?? ',', maxRows);
-    } else if (format === 'ndjson') {
-      parsedData = parseNdjsonRecords(fullText, maxRows);
+    if (csvParser) {
+      parsedData = csvParser.flush();
+    } else if (ndjsonParser) {
+      parsedData = ndjsonParser.flush();
     } else {
-      parsedData = parseJsonArrayRecords(fullText, maxRows);
+      parsedData = parseJsonArrayRecords(jsonChunks.join(''), maxRows);
     }
   } catch (err) {
     throw new Error(`Parsing failure: ${(err as Error).message}`, { cause: err });
@@ -397,6 +520,6 @@ export async function streamParseFile(
     rows: parsedData.rows,
     totalRows: parsedData.totalRows,
     isTruncated: parsedData.totalRows > maxRows,
-    warnings: [...warnings, ...(parsedData.warnings || [])],
+    warnings: parsedData.warnings || [],
   };
 }

@@ -266,22 +266,22 @@ describe('AI Foundation, Privacy Gateway & RAG Copilot (Phases 6-10)', () => {
   });
 
   describe('AI Provider Factory', () => {
-    it('creates OfflineAIProvider when mode is offline even if API key is provided', () => {
-      const provider = createAIProvider('offline', 'openai', 'sk-mock-key');
+    it('creates OfflineAIProvider when mode is offline', () => {
+      const provider = createAIProvider('offline');
       expect(provider.isLocal).toBe(true);
       expect(provider.id).toBe('offline');
     });
 
-    it('creates OpenAIProvider when mode is cloud-opt-in and apiKey is provided', () => {
-      const provider = createAIProvider('cloud-opt-in', 'openai', 'sk-test-key-123');
+    it('creates GroqProvider when mode is cloud-opt-in and provider is groq', () => {
+      const provider = createAIProvider('cloud-opt-in', 'groq');
       expect(provider.isLocal).toBe(false);
-      expect(provider.id).toBe('openai');
+      expect(provider.id).toBe('groq');
     });
 
-    it('creates GeminiProvider when mode is cloud-opt-in and provider is gemini', () => {
-      const provider = createAIProvider('cloud-opt-in', 'gemini', 'gemini-key-123');
-      expect(provider.isLocal).toBe(false);
-      expect(provider.id).toBe('gemini');
+    it('defaults to OfflineAIProvider when mode is offline even if groq requested', () => {
+      const provider = createAIProvider('offline', 'groq');
+      expect(provider.isLocal).toBe(true);
+      expect(provider.id).toBe('offline');
     });
   });
 });

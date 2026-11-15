@@ -24,6 +24,8 @@ export interface LoadedDataset {
   rawText: string;
   isSynthetic: boolean;
   rowCountEstimate?: number;
+  parsedRows?: Record<string, unknown>[];
+  columns?: string[];
 }
 
 export interface SyntheticPreset {

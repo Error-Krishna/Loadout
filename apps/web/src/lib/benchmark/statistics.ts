@@ -403,6 +403,12 @@ export interface ComparisonAssessmentResult {
   noiseThresholdMs: number;
   isOverlapping: boolean;
   warnings: string[];
+  mannWhitneyU?: MannWhitneyUResult;
+  bootstrapCI?: {
+    lowerMs: number;
+    upperMs: number;
+    pointEstimateMs: number;
+  };
 }
 
 /**
@@ -516,6 +522,22 @@ export function assessComparisonUncertainty(
   // Deduplicate warnings
   const uniqueWarnings = Array.from(new Set(warnings));
 
+  // Compute non-parametric rank sum and bootstrap CI if trial data is attached
+  let mannWhitneyU: MannWhitneyUResult | undefined;
+  let bootstrapCI: { lowerMs: number; upperMs: number; pointEstimateMs: number } | undefined;
+
+  const baseDurations = baseline.trials?.filter((t) => !t.isWarmup).map((t) => t.durationMs);
+  const candDurations = candidate.trials?.filter((t) => !t.isWarmup).map((t) => t.durationMs);
+
+  if (baseDurations && candDurations && baseDurations.length > 0 && candDurations.length > 0) {
+    try {
+      mannWhitneyU = calculateMannWhitneyU(baseDurations, candDurations);
+      bootstrapCI = calculateBootstrapMedianConfidenceInterval(baseDurations, candDurations);
+    } catch {
+      // Ignore if duration arrays fail validation
+    }
+  }
+
   // 6. Verdict Decision Matrix
   const absDeltaMs = Math.abs(deltaMedianMs);
   const absDeltaPct = Math.abs(deltaMedianPercent);
@@ -530,6 +552,8 @@ export function assessComparisonUncertainty(
       noiseThresholdMs,
       isOverlapping,
       warnings: uniqueWarnings,
+      mannWhitneyU,
+      bootstrapCI,
     };
   }
 
@@ -543,6 +567,8 @@ export function assessComparisonUncertainty(
       noiseThresholdMs,
       isOverlapping,
       warnings: uniqueWarnings,
+      mannWhitneyU,
+      bootstrapCI,
     };
   }
 
@@ -556,6 +582,8 @@ export function assessComparisonUncertainty(
       noiseThresholdMs,
       isOverlapping,
       warnings: uniqueWarnings,
+      mannWhitneyU,
+      bootstrapCI,
     };
   }
 
@@ -568,5 +596,213 @@ export function assessComparisonUncertainty(
     noiseThresholdMs,
     isOverlapping,
     warnings: uniqueWarnings,
+    mannWhitneyU,
+    bootstrapCI,
+  };
+}
+
+// ============================================================================
+// Non-Parametric Rank-Sum & Bootstrap Confidence Analysis
+// ============================================================================
+
+export interface MannWhitneyUResult {
+  u1: number;
+  u2: number;
+  u: number;
+  rankSum1: number;
+  rankSum2: number;
+  n1: number;
+  n2: number;
+  zScore: number;
+  pValue: number;
+  isSignificant: boolean;
+  hasTies: boolean;
+  tieCorrection: number;
+}
+
+/**
+ * High-accuracy complementary error function approximation (Abramowitz & Stegun 7.1.26).
+ * Max error < 1.5e-7.
+ */
+export function approximateErfc(x: number): number {
+  if (x < 0) return 2 - approximateErfc(-x);
+  const p = 0.3275911;
+  const a1 = 0.254829592;
+  const a2 = -0.284496736;
+  const a3 = 1.421413741;
+  const a4 = -1.453152027;
+  const a5 = 1.061405429;
+  const t = 1.0 / (1.0 + p * x);
+  const poly = ((((a5 * t + a4) * t + a3) * t + a2) * t + a1) * t;
+  return poly * Math.exp(-x * x);
+}
+
+/**
+ * Calculates the Mann-Whitney U test (Wilcoxon rank-sum test) for two independent duration samples.
+ *
+ * Methodological Guarantees:
+ * 1. Combines and sorts samples while preserving group identities.
+ * 2. Resolves ties using exact mid-rank assignment: sum of ranks = N(N+1)/2.
+ * 3. Applies tie-corrected variance:
+ *    \sigma_U^2 = \frac{n_1 n_2}{12} \left( N + 1 - \frac{\sum (t_k^3 - t_k)}{N(N-1)} \right)
+ * 4. Applies normal approximation with continuity correction:
+ *    Z = \frac{|U - \mu_U| - 0.5}{\sigma_U}
+ * 5. Calculates two-tailed p-value via complementary error function approximation.
+ */
+export function calculateMannWhitneyU(
+  sample1: readonly number[],
+  sample2: readonly number[],
+): MannWhitneyUResult {
+  validateDurations(sample1, 'sample1 in calculateMannWhitneyU');
+  validateDurations(sample2, 'sample2 in calculateMannWhitneyU');
+
+  const n1 = sample1.length;
+  const n2 = sample2.length;
+  const N = n1 + n2;
+
+  // Combine items with group tags
+  const combined: Array<{ value: number; group: 1 | 2 }> = [
+    ...sample1.map((v) => ({ value: v, group: 1 as const })),
+    ...sample2.map((v) => ({ value: v, group: 2 as const })),
+  ];
+
+  // Sort ascending by value
+  combined.sort((a, b) => a.value - b.value);
+
+  // Assign mid-ranks for ties
+  let i = 0;
+  let tieCorrection = 0;
+  let hasTies = false;
+  let rankSum1 = 0;
+  let rankSum2 = 0;
+
+  while (i < N) {
+    let j = i;
+    while (j < N - 1 && combined[j + 1]!.value === combined[i]!.value) {
+      j++;
+    }
+    const tieGroupSize = j - i + 1;
+    // Average rank of indices (i + 1) to (j + 1)
+    const midRank = (i + j + 2) / 2;
+
+    if (tieGroupSize > 1) {
+      hasTies = true;
+      tieCorrection += Math.pow(tieGroupSize, 3) - tieGroupSize;
+    }
+
+    for (let k = i; k <= j; k++) {
+      if (combined[k]!.group === 1) {
+        rankSum1 += midRank;
+      } else {
+        rankSum2 += midRank;
+      }
+    }
+
+    i = j + 1;
+  }
+
+  // Calculate U statistics
+  const u1 = n1 * n2 + (n1 * (n1 + 1)) / 2 - rankSum1;
+  const u2 = n1 * n2 + (n2 * (n2 + 1)) / 2 - rankSum2;
+  const u = Math.min(u1, u2);
+  const muU = (n1 * n2) / 2;
+
+  // Tie-corrected variance
+  let varianceU = 0;
+  if (N > 1) {
+    const correctionFactor = tieCorrection / (N * (N - 1));
+    varianceU = ((n1 * n2) / 12) * (N + 1 - correctionFactor);
+  }
+  const sigmaU = varianceU > 0 ? Math.sqrt(varianceU) : 0;
+
+  // Continuity-corrected Z-score
+  let zScore = 0;
+  if (sigmaU > 0) {
+    const diff = Math.abs(u - muU) - 0.5;
+    zScore = diff > 0 ? roundStat(diff / sigmaU, 4) : 0;
+  }
+
+  // Two-tailed p-value calculation
+  const pValue =
+    sigmaU > 0 ? roundStat(Math.min(1, Math.max(0, approximateErfc(zScore / Math.SQRT2))), 4) : 1;
+  const isSignificant = pValue < 0.05;
+
+  return {
+    u1: roundStat(u1, 2),
+    u2: roundStat(u2, 2),
+    u: roundStat(u, 2),
+    rankSum1: roundStat(rankSum1, 2),
+    rankSum2: roundStat(rankSum2, 2),
+    n1,
+    n2,
+    zScore,
+    pValue,
+    isSignificant,
+    hasTies,
+    tieCorrection,
+  };
+}
+
+/**
+ * Calculates a non-parametric bootstrap confidence interval for the difference between two sample medians.
+ *
+ * Uses the percentile bootstrap method with deterministic Pseudo-Random Number Generation (LCG)
+ * for fully reproducible, non-flaky execution across runs.
+ */
+export function calculateBootstrapMedianConfidenceInterval(
+  baseline: readonly number[],
+  candidate: readonly number[],
+  options: { resamples?: number; confidenceLevel?: number; seed?: number } = {},
+): {
+  lowerMs: number;
+  upperMs: number;
+  pointEstimateMs: number;
+} {
+  validateDurations(baseline, 'baseline in calculateBootstrapMedianConfidenceInterval');
+  validateDurations(candidate, 'candidate in calculateBootstrapMedianConfidenceInterval');
+
+  const { resamples = 1000, confidenceLevel = 0.95, seed = 42 } = options;
+  const nBase = baseline.length;
+  const nCand = candidate.length;
+
+  const pointEstimateMs = roundStat(calculateMedian(candidate) - calculateMedian(baseline));
+
+  // Deterministic 32-bit LCG for reproducibility
+  let state = seed >>> 0;
+  function nextRandom(): number {
+    state = (Math.imul(1664525, state) + 1013904223) >>> 0;
+    return state / 4294967296;
+  }
+
+  const deltaMedians: number[] = new Array(resamples);
+
+  for (let r = 0; r < resamples; r++) {
+    // Resample baseline
+    const baseSample: number[] = new Array(nBase);
+    for (let b = 0; b < nBase; b++) {
+      const idx = Math.floor(nextRandom() * nBase);
+      baseSample[b] = baseline[idx]!;
+    }
+
+    // Resample candidate
+    const candSample: number[] = new Array(nCand);
+    for (let c = 0; c < nCand; c++) {
+      const idx = Math.floor(nextRandom() * nCand);
+      candSample[c] = candidate[idx]!;
+    }
+
+    deltaMedians[r] = calculateMedian(candSample) - calculateMedian(baseSample);
+  }
+
+  deltaMedians.sort((a, b) => a - b);
+
+  const alpha = (1 - confidenceLevel) / 2;
+  const lowerIndex = Math.max(0, Math.floor(resamples * alpha));
+  const upperIndex = Math.min(resamples - 1, Math.ceil(resamples * (1 - alpha)) - 1);
+
+  return {
+    lowerMs: roundStat(deltaMedians[lowerIndex]!),
+    upperMs: roundStat(deltaMedians[upperIndex]!),
+    pointEstimateMs,
   };
 }

@@ -63,9 +63,10 @@ export default function AICopilotDrawer({
   const [inputQuery, setInputQuery] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [showPayloadInspection, setShowPayloadInspection] = useState(false);
+  const [aiMode, setAiMode] = useState<'offline' | 'groq'>('offline');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const provider = createAIProvider('offline');
+  const provider = createAIProvider(aiMode === 'groq' ? 'cloud-opt-in' : 'offline', aiMode);
   const sanitizedContext = defaultPrivacyGateway.sanitizeContext(context);
 
   useEffect(() => {
@@ -131,12 +132,32 @@ export default function AICopilotDrawer({
       {/* Drawer Header */}
       <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/80">
         <div className="flex items-center gap-2.5">
-          <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+          <div
+            className={`w-2.5 h-2.5 rounded-full ${
+              aiMode === 'offline' ? 'bg-emerald-400' : 'bg-cyan-400'
+            } animate-pulse`}
+          />
           <div>
             <h3 className="text-sm font-bold text-slate-100 font-mono">Performance Copilot</h3>
-            <span className="text-[11px] font-mono text-emerald-400">
+            <span className="text-[11px] font-mono text-emerald-400 block">
               Private Mode: Zero Network Egress
             </span>
+            <div className="flex items-center gap-2 mt-1">
+              <button
+                type="button"
+                onClick={() => setAiMode(aiMode === 'offline' ? 'groq' : 'offline')}
+                className={`text-[10px] font-mono px-2 py-0.5 rounded transition-colors ${
+                  aiMode === 'offline'
+                    ? 'bg-emerald-950 text-emerald-300 border border-emerald-800 hover:bg-emerald-900'
+                    : 'bg-cyan-950 text-cyan-300 border border-cyan-800 hover:bg-cyan-900'
+                }`}
+                title="Click to toggle between Offline AI (Zero Egress) and Groq Cloud (Free)"
+              >
+                {aiMode === 'offline'
+                  ? '🔒 Offline Mode (Zero Egress)'
+                  : '⚡ Groq Cloud Mode (Free)'}
+              </button>
+            </div>
           </div>
         </div>
 

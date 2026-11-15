@@ -217,8 +217,10 @@ export async function runDatasetComparisonSuite(
       distribution: baselineRun.distribution,
       domNodeCount: createProvenancedValue(
         baseOutput.domNodeCount,
-        'measured',
-        'DOM elements required to mount full un-virtualized dataset',
+        baseOutput.isDomMeasured ? 'measured' : 'estimated',
+        baseOutput.isDomMeasured
+          ? 'Live DOM query via querySelectorAll(*) in mounted container'
+          : 'Calculated DOM element count formula: rows * (cols + 1)',
       ),
       estimatedMemoryBytes: createProvenancedValue(
         rows.length * columns.length * 64,
@@ -233,8 +235,10 @@ export async function runDatasetComparisonSuite(
       distribution: candidateRun.distribution,
       domNodeCount: createProvenancedValue(
         candidateOutput.domNodeCount,
-        'measured',
-        'DOM elements required to mount viewport-only row window',
+        candidateOutput.isDomMeasured ? 'measured' : 'estimated',
+        candidateOutput.isDomMeasured
+          ? 'Live DOM query via querySelectorAll(*) in windowed viewport container'
+          : 'Calculated windowed DOM node formula: windowRows * (cols + 1)',
       ),
       estimatedMemoryBytes: createProvenancedValue(
         candidateOutput.mountedRowCount * columns.length * 64,

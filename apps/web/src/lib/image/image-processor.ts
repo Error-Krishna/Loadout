@@ -151,8 +151,8 @@ export async function transformImageClient(
         sizeBytes: Math.round(1024 * 1024 * options.quality * 0.4),
         width: targetWidth,
         height: targetHeight,
-        compressionRatio: 2.5,
-        decodeTimeMs: 4.2,
+        compressionRatio: 1.0,
+        decodeTimeMs: 0,
         decodeMode,
         isEstimatedFallback: true,
       });
@@ -170,8 +170,8 @@ export async function transformImageClient(
             sizeBytes: Math.round(1024 * 1024 * options.quality * 0.4),
             width: targetWidth,
             height: targetHeight,
-            compressionRatio: 2.5,
-            decodeTimeMs: 4.2,
+            compressionRatio: 1.0,
+            decodeTimeMs: 0,
             decodeMode,
             isEstimatedFallback: true,
           });
@@ -179,7 +179,7 @@ export async function transformImageClient(
         }
 
         const startDecode = performance.now();
-        let decodeTime = 2.5;
+        let decodeTime = 0;
 
         try {
           if (decodeMode === 'offscreen' && typeof createImageBitmap === 'function') {
@@ -198,7 +198,7 @@ export async function transformImageClient(
             URL.revokeObjectURL(testImg.src);
           }
         } catch {
-          decodeTime = 3.0;
+          decodeTime = 0;
         }
 
         const dataUrl = URL.createObjectURL(blob);

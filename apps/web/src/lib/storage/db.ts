@@ -14,6 +14,27 @@ export const DB_VERSION = 1;
 
 export type StoreName = 'sessions' | 'benchmarkResults' | 'reports' | 'settings';
 
+export type StorageStatus = 'indexeddb' | 'ram-fallback';
+type StorageStatusListener = (status: StorageStatus, reason?: string) => void;
+const statusListeners = new Set<StorageStatusListener>();
+
+function notifyStorageStatus(status: StorageStatus, reason?: string): void {
+  for (const listener of statusListeners) {
+    try {
+      listener(status, reason);
+    } catch {
+      // Ignore listener error
+    }
+  }
+}
+
+export function onStorageStatusChange(listener: StorageStatusListener): () => void {
+  statusListeners.add(listener);
+  return () => {
+    statusListeners.delete(listener);
+  };
+}
+
 export interface StorageAdapter {
   put<T>(storeName: StoreName, key: string, value: T): Promise<void>;
   get<T>(storeName: StoreName, key: string): Promise<T | undefined>;
@@ -163,10 +184,14 @@ class IndexedDbAdapter implements StorageAdapter {
     try {
       const db = await this.getDB();
       return await operation(db);
-    } catch {
+    } catch (err) {
       // Initialize fallback on any failure (e.g. security errors, private mode)
       if (!this.fallback) {
         this.fallback = new MemoryStorageAdapter();
+        notifyStorageStatus(
+          'ram-fallback',
+          err instanceof Error ? err.message : 'IndexedDB unavailable; operating in memory',
+        );
       }
       return fallbackOp(this.fallback);
     }
@@ -312,6 +337,13 @@ let activeAdapter: StorageAdapter = new IndexedDbAdapter();
  */
 export function getStorage(): StorageAdapter {
   return activeAdapter;
+}
+
+/**
+ * Returns whether current persistence is backed by native IndexedDB or RAM fallback.
+ */
+export function getStorageStatus(): StorageStatus {
+  return activeAdapter.isUsingFallback() ? 'ram-fallback' : 'indexeddb';
 }
 
 /**

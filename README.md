@@ -1,10 +1,16 @@
-# LOADOUT (v2.0)
+# LOADOUT (v2.1)
 
 > **The engineering engine measures. AI interprets.**
 
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Vercel%20Deployment-000000?style=for-the-badge&logo=vercel&logoColor=white)](https://loadout-seven-virid.vercel.app/)
+[![Tests](<https://img.shields.io/badge/Tests-238%20Passed%20(100%25)-success?style=for-the-badge>)](https://loadout-seven-virid.vercel.app/)
+[![Privacy](https://img.shields.io/badge/Privacy-Zero%20Data%20Egress-blue?style=for-the-badge)](https://loadout-seven-virid.vercel.app/)
+
+**Live Workbench:** [https://loadout-seven-virid.vercel.app/](https://loadout-seven-virid.vercel.app/)
+
 LOADOUT is a production-grade, AI-assisted performance engineering workbench designed for frontend developers and systems engineers. It provides empirical measurement, statistical rigor, and controlled experimentation for modern web workloads—including large-scale dataset rendering, client-side image processing pipelines, and high-throughput real-time streaming architectures.
 
-LOADOUT is built on a strict **local-first, privacy-preserving foundation**: user datasets, raw records, and sensitive payloads never leave the browser. While the deterministic measurement engine profiles execution times and enforces semantic correctness gates, the integrated AI Copilot interprets statistical results, explains performance trade-offs, and recommends verified optimization strategies using an embedded knowledge retrieval (RAG) system.
+LOADOUT is built on a strict **local-first, free-first, privacy-preserving foundation**: user datasets, raw records, and sensitive payloads never leave the browser. While the deterministic measurement engine profiles execution times and enforces semantic correctness gates, the integrated AI Copilot interprets statistical results, explains performance trade-offs, and recommends verified optimization strategies using an authentic BM25 knowledge retrieval (RAG) system. LOADOUT requires zero paid commercial AI credentials—operating entirely offline by default with an optional free Groq cloud acceleration tier.
 
 ---
 
@@ -19,6 +25,7 @@ LOADOUT is built on a strict **local-first, privacy-preserving foundation**: use
   - [5. Privacy Gateway & AI Copilot](#5-privacy-gateway--ai-copilot)
   - [6. Local Persistence & State Engine](#6-local-persistence--state-engine)
 - [Monorepo Structure](#monorepo-structure)
+- [Live Demo & Deployment](#live-demo--deployment)
 - [Getting Started](#getting-started)
 - [Verification & Quality Commands](#verification--quality-commands)
 - [Technology Stack](#technology-stack)
@@ -107,10 +114,10 @@ LOADOUT is built on a strict **local-first, privacy-preserving foundation**: use
                  |                                                       |
                  v                                                       v
 +---------------------------------+                     +---------------------------------+
-| Curated RAG Knowledge Base      |                     | AI Copilot Provider Engine      |
-| - In-Memory BM25/Lexical Search |                     | - Offline Rule-Based Provider   |
-| - Engineering Citations & Links |                     | - BYOK OpenAI Provider          |
-| - Virtualization, GC, Workers   |                     | - BYOK Gemini Provider          |
+| Curated RAG Knowledge Base      |                     | Free-First AI Copilot Engine    |
+| - Mathematical BM25 Search      |                     | - Offline Heuristic Provider    |
+| - Engineering Citations & Links |                     | - Groq Cloud AI (Free Opt-in)   |
+| - Grounded Citation Validation  |                     | - Zero Commercial API Keys      |
 +---------------------------------+                     +---------------------------------+
 ```
 
@@ -174,28 +181,29 @@ LOADOUT is built on a strict **local-first, privacy-preserving foundation**: use
 ### 5. Privacy Gateway & AI Copilot
 
 - **Privacy Boundary**: Sits between the workbench state and all AI providers. It strips raw dataset rows, columns, and private values, constructing a sanitized payload containing only structural metadata (row count, column names, data types) and verified benchmark statistics.
-- **Curated RAG Knowledge Base**: High-speed in-memory lexical search engine loaded with verified engineering papers and references:
+- **Curated RAG Knowledge Base**: High-speed in-memory BM25 retrieval engine ($k_1 = 1.2, b = 0.75$, length normalization) loaded with verified engineering papers and references:
   - DOM virtualization and layout thrashing avoidance.
   - Web Worker concurrency and structured clone overhead.
   - JavaScript memory management and Garbage Collection pause mitigation.
   - Real-time backpressure and streaming queue architectures.
   - Statistical benchmark methodology in V8/browser environments.
-- **Multi-Provider Support**:
-  - `OfflineAIProvider`: Built-in local rule-based heuristic intelligence engine requiring no API keys, interpreting benchmarks, trade-offs, and experiment plans locally.
-  - `OpenAIProvider`: Direct user-configured BYOK integration.
-  - `GeminiProvider`: Direct user-configured BYOK integration.
-- **Interactive UI**: Sliding drawer accessible across the entire application with quick-prompt shortcuts, expandable citation cards, and an inspectable payload view disclosing the exact sanitized data sent to the AI.
+  - Verifiable citation validation against ground-truth knowledge chunk IDs.
+- **Free-First AI Architecture**:
+  - `OfflineAIProvider`: Built-in local heuristic performance engine requiring 0 API keys and zero network egress, interpreting benchmarks, trade-offs, and experiment plans locally.
+  - `GroqProvider`: Free server-side open-weight LLM inference (Llama 3.3 70B) via backend gateway (`POST /api/ai/completions`) with automatic fallback to Offline AI. Zero client credentials required.
+  - Elimination of all paid commercial BYOK API key fields (OpenAI, Gemini, Claude).
+- **Interactive UI**: Sliding drawer accessible across the entire application with quick-prompt shortcuts, expandable citation cards, active provider toggle (Offline vs. Groq), and an inspectable payload view disclosing the exact sanitized data sent to the AI.
 
 ### 6. Local Persistence & State Engine
 
 - **Native IndexedDB Adapter (`db.ts`)**: Promisified, transaction-safe storage engine with zero external dependencies.
-- **Headless & SSR Fallback**: Seamless, transparent in-memory storage fallback for Node.js test runners, headless environments, or private browsing modes.
+- **Headless & SSR Fallback**: Seamless, transparent in-memory storage fallback for Node.js test runners, headless environments, or private browsing modes, with active fallback status notification.
 - **Object Stores**:
   - `sessions`: Active workflow state, dataset metadata, and configuration.
   - `benchmarkResults`: Complete historical benchmark comparison records and correctness results.
   - `reports`: Saved optimization reports with metrics and findings.
-  - `settings`: User preferences, AI provider selections, and encrypted local API keys.
-- **State Export/Import**: One-click JSON backup bundle generation and restoration.
+  - `settings`: User preferences, hardware concurrency caps, and memory budgets.
+- **State Export/Import**: One-click JSON backup bundle generation with Zod schema validation on import to reject corrupted bundles.
 
 ---
 
@@ -249,6 +257,23 @@ LOADOUT is built on a strict **local-first, privacy-preserving foundation**: use
 
 ---
 
+## Live Demo & Deployment
+
+The production build of LOADOUT is deployed live on Vercel:
+
+👉 **[https://loadout-seven-virid.vercel.app/](https://loadout-seven-virid.vercel.app/)**
+
+### Vercel Deployment Architecture
+
+The application is pre-configured for frictionless Vercel deployment:
+
+- **Monorepo Root & Subdirectory Support**: Works identically when deploying from repository root (`vercel.json`) or setting Root Directory to `apps/web` (`apps/web/vercel.json`).
+- **SPA Deep-Linking & History API**: Clean rewrites guarantee deep-linking and browser page refreshes (`/workloads`, `/performance-lab`, `/settings`) resolve directly to `/index.html`.
+- **Serverless Edge AI Endpoint**: Serves `/api/ai/completions` and `/api/health` via Vercel Edge Functions (`api/ai/completions.ts`) with zero cold start.
+- **Client-Side Autonomy**: Operates 100% offline with zero network egress by default via `OfflineAIProvider`. Adding `GROQ_API_KEY` to Vercel environment variables enables the optional Groq cloud inference acceleration tier.
+
+---
+
 ## Getting Started
 
 ### Prerequisites
@@ -292,7 +317,7 @@ pnpm typecheck
 # 2. Lint all workspaces (ESLint with zero warnings/errors)
 pnpm lint
 
-# 3. Run the complete automated test suite (191+ tests across 26 test files)
+# 3. Run the complete automated test suite (238 tests across 28 test files, 100% passing)
 pnpm test
 
 # 4. Execute production compilation and bundle verification
